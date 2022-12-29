@@ -23,6 +23,7 @@ use crate::qlib::vcpu_mgr::CPULocal;
 
 #[inline]
 pub fn WriteMsr(msr: u32, value: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         let low = value as u32;
         let high = (value >> 32) as u32;
@@ -33,10 +34,19 @@ pub fn WriteMsr(msr: u32, value: u64) {
             in("edx") high
         );
     }
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!(
+            "msr",
+            in("x2") msr,
+            in("x0") value
+        );
+    }
 }
 
 #[inline]
 pub fn ReadMsr(msr: u32) -> u64 {
+    #[cfg(not(target_arch = "aarch64"))]{
     let (high, low): (u32, u32);
     unsafe {
         asm!(
@@ -46,7 +56,19 @@ pub fn ReadMsr(msr: u32) -> u64 {
             in("ecx") msr
         );
     }
-    ((high as u64) << 32) | (low as u64)
+    return ((high as u64) << 32) | (low as u64);
+    }
+    #[cfg(target_arch = "aarch64")]{
+    let value: u64;
+    unsafe {
+        asm!(
+            "mrs",
+            out("x0") value,
+            in("x3") msr
+        );
+    }
+    return value
+    }
 }
 
 #[inline]
@@ -58,13 +80,22 @@ pub fn SwapGs() {
 
 pub fn GetVcpuId() -> usize {
     let result: usize;
-    unsafe {
-        asm!(
-            "mov rax, gs:16",
-            out("rax") result
-        );
-    }
-
+    #[cfg(not(target_arch = "aarch64"))]{
+        unsafe {
+            asm!(
+                "mov rax, gs:16",
+                out("rax") result
+            );
+        }
+    } 
+    #[cfg(target_arch = "aarch64")]{
+        unsafe {
+            asm!(
+                "ldr x0, [x28, #16]",
+                out("x0") result
+            );
+        }
+    }  
     return result;
 }
 
@@ -117,6 +148,7 @@ pub fn EnterUser(entry: u64, userStackAddr: u64, kernelStackAddr: u64) -> ! {
     IRet(pt as *const _ as u64);
 }
 
+#[cfg(not(target_arch = "aarch64"))]
 #[inline]
 pub fn EnterUser1(entry: u64, userStackAddr: u64, kernelStackAddr: u64) -> ! {
     //PerfGoto(PerfType::User);
@@ -199,6 +231,7 @@ pub fn SyscallRet(kernelRsp: u64) -> ! {
 
 #[inline]
 pub fn IRet(kernelRsp: u64) -> ! {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("
                 mov rsp, rax
@@ -229,24 +262,69 @@ pub fn IRet(kernelRsp: u64) -> ! {
               );
         panic!("won't reach");
     }
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("
+                mov sp, x0 // move value in x0 to sp
+
+                // store callee-save registers for signal handling
+                pop x15
+                pop x14
+                pop x13
+                pop x12
+                pop x29
+                pop x11
+                pop x10
+                pop x9
+                pop x8
+                pop x0
+                pop x1
+                pop x2
+                pop x3
+                pop x4
+                add sp, #8
+                msr tpidr_el0, xzr // clear tpidr_el0 system register
+                eret // return from exception    
+              ",
+              in("x0") kernelRsp
+              );
+        panic!("won't reach");
+    }
 }
 
 #[inline]
 pub fn GetRsp() -> u64 {
-    let rsp: u64;
-    unsafe { 
-        asm!(
-            "mov rax, rsp",
-            out("rax") rsp
-        ) };
-    return rsp;
+    #[cfg(not(target_arch = "aarch64"))]{
+        let rsp: u64;
+        unsafe { 
+            asm!(
+                "mov rax, rsp",
+                out("rax") rsp
+            ) };
+        return rsp;
+    }
+    #[cfg(target_arch = "aarch64")]{
+        let rsp: u64;
+        unsafe { 
+            asm!(
+                "mov x0, sp",
+                out("x0") rsp
+            ) };
+        return rsp;
+    }   
 }
 
 #[inline]
 pub fn Clflush(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe { asm!(
         "clflush (rax)",
         in("rax") addr
+    ) }
+    #[cfg(target_arch = "aarch64")]
+    unsafe { asm!(
+        "dc civac, x0",
+        in("x0") addr
     ) }
 }
 
@@ -276,6 +354,7 @@ pub fn AsmHostID(axArg: u32, cxArg: u32) -> (u32, u32, u32, u32) {
     let bx: u32;
     let mut cx: u32 = cxArg;
     let dx: u32;
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("
               mov {0:r}, rbx 
@@ -288,7 +367,22 @@ pub fn AsmHostID(axArg: u32, cxArg: u32) -> (u32, u32, u32, u32) {
             out("edx") dx,
             );
     }
-
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("
+                mov {0:x}, x11
+                mrs x0, midr_el1
+                mrs x1, mpidr_el1
+                mrs x2, ctr_el0
+                mrs x3, tcr_el1
+                xchg {0:x}, x11
+            ",
+            lateout(reg) bx,
+            inout("x0") ax,
+            inout("x2") cx,
+            out("x3") dx,
+            );
+    }
     return (ax, bx, cx, dx);
 }
 
@@ -314,11 +408,20 @@ pub fn WriteBarrier() {
 #[inline(always)]
 pub fn GetCpu() -> u32 {
     let rcx: u64;
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
             rdtscp
             ",
             out("rcx") rcx
+        )
+    };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+            mrs x1, midr_el1
+            ",
+            out("x1") rcx
         )
     };
 
@@ -329,6 +432,7 @@ pub fn GetCpu() -> u32 {
 #[inline(always)]
 pub fn GetRflags() -> u64 {
     let rax: u64;
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 pushfq                  # push eflags into stack
@@ -337,12 +441,21 @@ pub fn GetRflags() -> u64 {
             out("rax") rax
         )
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("
+                mrs x0, daif
+            ",
+            out("x0") rax
+        )
+    };
 
     return rax;
 }
 
 #[inline(always)]
 pub fn SetRflags(val: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 push rax
@@ -350,6 +463,15 @@ pub fn SetRflags(val: u64) {
             ",
             in("rax") val)
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("
+                mrs daif, x0
+            ",
+            in("x0")  val
+        )
+    };
+
 }
 
 pub fn SaveFloatingPoint(addr: u64) {
@@ -371,53 +493,95 @@ pub fn LoadFloatingPoint(addr: u64) {
 }
 
 pub fn xsave(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 xsave64 [rdi + 0]
             ",
             in("rdi") addr, )
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                stp q0, q1, [x0]
+            ",
+            in("x0") addr, )
+    };
 }
 
 pub fn xsaveopt(addr: u64) {
-    let negtive1: u64 = 0xffffffff;
+    #[cfg(not(target_arch = "aarch64"))]{
+        let negtive1: u64 = 0xffffffff;
+        unsafe {
+            asm!("\
+                    xsaveopt64 [rdi + 0]
+                ",
+                in("rdi") addr, 
+                in("eax") negtive1,
+                in("edx") negtive1)
+        };
+    }
+    #[cfg(target_arch = "aarch64")]
     unsafe {
         asm!("\
-                xsaveopt64 [rdi + 0]
+                stp q0, q1, [x0]
             ",
-            in("rdi") addr, 
-            in("eax") negtive1,
-            in("edx") negtive1)
+            in("x0") addr, )
     };
 }
 
 pub fn xrstor(addr: u64) {
-    let negtive1: u64 = 0xffffffff;
+    #[cfg(not(target_arch = "aarch64"))]{
+        let negtive1: u64 = 0xffffffff;
+        unsafe {
+            asm!("\
+                    xrstor64 [rdi + 0]
+                ",
+                in("rdi") addr,
+                in("eax") negtive1,
+                in("edx") negtive1)
+        };
+    }
+    #[cfg(target_arch = "aarch64")]
     unsafe {
         asm!("\
-                xrstor64 [rdi + 0]
+                ldp q0, q1, [x0]
             ",
-            in("rdi") addr,
-            in("eax") negtive1,
-            in("edx") negtive1)
+            in("x0") addr, )
     };
 }
 
 pub fn fxsave(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 fxsave64 [rax + 0]
             ",
             in("rax") addr)
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                stp q0, q1, [x0]
+            ",
+            in("x0") addr, )
+    };
 }
 
 pub fn fxrstor(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 fxrstor64 [rax + 0]
             ",
             in("rax") addr)
+    };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                ldp q0, q1, [x0]
+            ",
+            in("x0") addr, )
     };
 }
 
@@ -450,24 +614,41 @@ pub fn lfence() {
 }
 
 pub fn stmxcsr(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 STMXCSR [rax]
             ",
             in("rax") addr)
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                msr fpcr, x0
+            ",
+            in("x0") addr)
+    };
 }
 
 pub fn ldmxcsr(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 LDMXCSR [rax]
             ",
             in("rax") addr)
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                mrs x0, fpcr
+            ",
+            in("x0") addr)
+    };
 }
 
 pub fn FSTCW(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 FSTCW [rax]
@@ -475,14 +656,29 @@ pub fn FSTCW(addr: u64) {
             in("rax") addr
         )
     };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                msr fpcr, x0
+            ",
+            in("x0") addr)
+    };
 }
 
 pub fn FLDCW(addr: u64) {
+    #[cfg(not(target_arch = "aarch64"))]
     unsafe {
         asm!("\
                 FLDCW [rax]
             ",
             in("rax") addr)
+    };
+    #[cfg(target_arch = "aarch64")]
+    unsafe {
+        asm!("\
+                mrs x0, fpcr
+            ",
+            in("x0") addr)
     };
 }
 
@@ -503,33 +699,57 @@ pub fn fninit() {
 }
 
 pub fn xsetbv(val: u64) {
-    let reg = 0u64;
-    let val_l = val & 0xffff;
-    let val_h = val >> 32;
-    unsafe {
-        asm!("\
-                xsetbv
-            ",
-            in("rcx") reg,
-            in("edx") val_h,
-            in("eax") val_l,
-        )
-    };
+    #[cfg(not(target_arch = "aarch64"))]{
+        let reg = 0u64;
+        let val_l = val & 0xffff;
+        let val_h = val >> 32;
+        unsafe {
+            asm!("\
+                    xsetbv
+                ",
+                in("rcx") reg,
+                in("edx") val_h,
+                in("eax") val_l,
+            )
+        };
+    }
+    #[cfg(target_arch = "aarch64")]{
+        unsafe {
+            asm!("\
+                    msr sctlr_el1, x0
+                ",
+                in("x0") val
+            )
+        };
+    }
 }
 
 pub fn xgetbv() -> u64 {
-    let reg :u64 = 0;
-    let val_l: u32;
-    let val_h: u32;
-    unsafe {
-        asm!("\
-                xgetbv
-            ",
-            out("edx") val_h,
-            out("eax") val_l,
-            in("rcx") reg
-        )
-    };
-    let val = ((val_h as u64) << 32) | ((val_l as u64) & 0xffff);
-    return val;
+    #[cfg(not(target_arch = "aarch64"))]{
+        let reg :u64 = 0;
+        let val_l: u32;
+        let val_h: u32;
+        unsafe {
+            asm!("\
+                    xgetbv
+                ",
+                out("edx") val_h,
+                out("eax") val_l,
+                in("rcx") reg
+            )
+        };
+        let val = ((val_h as u64) << 32) | ((val_l as u64) & 0xffff);
+        return val;
+    }
+    #[cfg(target_arch = "aarch64")]{
+        let val: u64;
+        unsafe {
+            asm!("\
+                    mrs x0, sctlr_el1
+                ",
+                out("x0") val,
+            )
+        };
+        return val;
+    }
 }

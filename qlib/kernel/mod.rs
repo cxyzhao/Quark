@@ -139,19 +139,34 @@ impl Tsc {
 
     #[inline(always)]
     pub fn RawRdtsc() -> i64 {
-        let rax: u64;
-        let rdx: u64;
-        unsafe {
-            asm!("
-                lfence
-                rdtsc
-                ",
-                out("rax") rax,
-                out("rdx") rdx
-            )
-        };
+        #[cfg(not(target_arch = "aarch64"))]{
+            let rax: u64;
+            let rdx: u64;
+            unsafe {
+                asm!("
+                    lfence
+                    rdtsc
+                    ",
+                    out("rax") rax,
+                    out("rdx") rdx
+                )
+            };
 
-        return rax as i64 | ((rdx as i64) << 32);
+            return rax as i64 | ((rdx as i64) << 32);
+        }
+        #[cfg(target_arch = "aarch64")]{
+            let rax: u64;
+            unsafe {
+                asm!("
+                    dmb ishld;
+                    mrs x0, cntvct_el0
+                    ",
+                    out("x0") rax,
+                )
+            };
+            return rax as i64;
+        }
+        
     }
 
     pub fn SetOffset(&self, offset: i64) {

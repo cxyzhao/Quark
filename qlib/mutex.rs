@@ -74,6 +74,7 @@ impl<T, R> QMutexIntern<T, R> {
     }
 }
 
+#[cfg(not(target_arch = "aarch64"))]
 #[inline(always)]
 pub fn CmpExchg(addr: u64, old: u64, new: u64) -> u64 {
     let mut ret: u64;
@@ -103,6 +104,7 @@ pub fn WriteOnce(addr: u64, val: u64) {
     };
 }
 
+#[cfg(not(target_arch = "aarch64"))]
 #[inline(always)]
 pub fn LoadOnce(addr: u64) -> u64 {
     let ret: u64;
@@ -121,14 +123,17 @@ pub fn LoadOnce(addr: u64) -> u64 {
 
 impl<T: ?Sized> QMutexIntern<T> {
     #[inline(always)]
+
     pub fn CmpExchg(&self, old: u64, new: u64) -> u64 {
         /*match self.lock.compare_exchange(old, new, QOrdering::ACQUIRE, QOrdering::RELAXED) {
             Ok(v) => return v,
             Err(v) => return v,
         }*/
 
+        #[cfg(not(target_arch = "aarch64"))]
         return CmpExchg(&self.lock as *const _ as u64, old, new);
-        //return self.lock.compare_and_swap(old, new, QOrdering::ACQUIRE);
+        #[cfg(target_arch = "aarch64")]
+        return self.lock.compare_and_swap(old, new, QOrdering::ACQUIRE);
     }
 
     pub fn Addr(&self) -> u64 {
@@ -187,9 +192,11 @@ impl<T: ?Sized> QMutexIntern<T> {
 
     #[inline(always)]
     pub fn is_locked(&self) -> bool {
-        //self.lock.load(QOrdering::RELAXED) != 0
 
+        #[cfg(not(target_arch = "aarch64"))]
         return LoadOnce(self.Addr()) != 0;
+        #[cfg(target_arch = "aarch64")]
+        return self.lock.load(QOrdering::RELAXED) != 0;
     }
 
     #[inline(always)]

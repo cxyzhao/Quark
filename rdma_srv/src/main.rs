@@ -50,7 +50,10 @@ extern crate lazy_static;
 
 extern crate libc;
 extern crate spin;
+#[cfg(not(target_arch = "aarch64"))]
 extern crate x86_64;
+#[cfg(target_arch = "aarch64")]
+extern crate armv8;
 #[macro_use]
 extern crate log;
 extern crate caps;
