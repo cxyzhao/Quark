@@ -50,10 +50,7 @@ extern crate lazy_static;
 
 extern crate libc;
 extern crate spin;
-#[cfg(not(target_arch = "aarch64"))]
 extern crate x86_64;
-#[cfg(target_arch = "aarch64")]
-extern crate armv8;
 #[macro_use]
 extern crate log;
 extern crate caps;
@@ -173,7 +170,7 @@ pub const IO_WAIT_CYCLES: i64 = 100_000_000; // 1ms
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("RDMA Service is starting!");
-    RDMA.Init("", 1);
+    RDMA.Init("mlx5_2", 1);
     let hostname_os = hostname::get()?;
     match hostname_os.into_string() {
         Ok(v) => RDMA_CTLINFO.hostname_set(v),
