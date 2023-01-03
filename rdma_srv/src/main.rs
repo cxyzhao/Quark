@@ -148,7 +148,7 @@ macro_rules! syscall {
 }
 
 #[repr(C)]
-#[repr(packed)]
+// #[repr(packed)]
 #[derive(Default, Copy, Clone, Debug)]
 pub struct EpollEvent {
     pub Events: u32,
@@ -316,8 +316,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if !RDMA_CTLINFO.isK8s {
             if args.len() > 1 {
-                let peerIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
-                let localIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
+                // let peerIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
+                // let localIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
+                let peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
+                let localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&peerIpAddr);
                 SetupConnection(&localIpAddr);
@@ -331,7 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //     sin_zero: mem::zeroed(),
                 // };
             } else {
-                let localIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
+                let localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&localIpAddr);
             }
@@ -389,6 +391,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let mut eventdata: u64 = 0;
 
     let srvEventFd = RDMA_SRV.eventfd;
+    println!("srvEventFd: {}", srvEventFd);
     epoll_add(epoll_fd, srvEventFd, read_event(srvEventFd as u64))?;
     unblock_fd(srvEventFd);
     RDMA_CTLINFO.fds_insert(srvEventFd, Srv_FdType::SrvEventFd(srvEventFd));
@@ -429,7 +432,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             epoll_fd,
             events.as_mut_ptr() as *mut libc::epoll_event,
             1024,
-            -1 as libc::c_int,
+            -1 as libc::c_int
         )) {
             Ok(v) => v,
             Err(e) => panic!("error during epoll wait: {}", e),
@@ -445,7 +448,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> Result<(), Box<dyn std::error::Error>> {
     let mut eventdata: u64 = 0;
     for ev in events {
-        // print!("u64: {}, events: {:x}", ev.U64, ev.Events);
+        // print!("u64: {:x}, events: {:x}", {ev.U64}, {ev.Events});
         // let event_data = RDMA_CTLINFO.fds_get(ev.U64 as i32);
         let mut fds = RDMA_CTLINFO.fds.lock();
         let event_data = fds.get(&(ev.U64 as i32)).unwrap();

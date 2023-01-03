@@ -707,6 +707,7 @@ pub fn close(fd: RawFd) {
 }
 
 pub fn epoll_add(epoll_fd: RawFd, fd: RawFd, mut event: libc::epoll_event) -> std::io::Result<()> {
+    print!("epoll_add u64: {:x}", {event.u64});
     syscall!(epoll_ctl(epoll_fd, libc::EPOLL_CTL_ADD, fd, &mut event))?;
     Ok(())
 }

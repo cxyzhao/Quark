@@ -94,55 +94,58 @@ impl Default for CtrlInfo {
         let mut podIdToVpcIpAddrMap: HashMap<String, VpcIpAddr> = HashMap::new();
         let mut vpcIpAddrToPodIdMap: HashMap<VpcIpAddr, String> = HashMap::new();
 
-        let isK8s = true;
+        // let isK8s = true;
+        let isK8s = false;
         if !isK8s {
-            let lab1ip = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
+            //let lab1ip = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
+            let lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
             let node1 = Node {
                 hostname: String::from("lab 1"),
                 ipAddr: lab1ip,
                 timestamp: 0,
-                subnet: u32::from(Ipv4Addr::from_str("192.168.2.0").unwrap()),
+                subnet: u32::from(Ipv4Addr::from_str("172.16.2.0").unwrap()),
                 netmask: u32::from(Ipv4Addr::from_str("255.255.255.0").unwrap()),
                 resource_version: 0,
             };
-            let lab2ip = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
+            //let lab2ip = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
+            let lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
             let node2 = Node {
                 hostname: String::from("lab 2"),
                 ipAddr: lab2ip,
                 timestamp: 0,
-                subnet: u32::from(Ipv4Addr::from_str("192.168.1.0").unwrap()),
+                subnet: u32::from(Ipv4Addr::from_str("172.16.1.0").unwrap()),
                 netmask: u32::from(Ipv4Addr::from_str("255.255.255.0").unwrap()),
                 resource_version: 0,
             };
             nodes.insert(lab1ip, node1);
             nodes.insert(lab2ip, node2);
-            error!("u32::from(Ipv4Addr::from_str('192.168.2.8').unwrap()).to_be(): {}, u32::from(Ipv4Addr::from_str('192.168.1.8').unwrap()).to_be(): {}", u32::from(Ipv4Addr::from_str("192.168.2.8").unwrap()).to_be(), u32::from(Ipv4Addr::from_str("192.168.1.8").unwrap()).to_be());
+            error!("u32::from(Ipv4Addr::from_str('172.16.2.8').unwrap()).to_be(): {}, u32::from(Ipv4Addr::from_str('192.168.1.8').unwrap()).to_be(): {}", u32::from(Ipv4Addr::from_str("192.168.2.8").unwrap()).to_be(), u32::from(Ipv4Addr::from_str("192.168.1.8").unwrap()).to_be());
             podIdToVpcIpAddrMap.insert(
                 "server".to_string(),
                 VpcIpAddr {
                     vpcId: 1,
-                    ipAddr: u32::from(Ipv4Addr::from_str("192.168.2.8").unwrap()).to_be(),
+                    ipAddr: u32::from(Ipv4Addr::from_str("172.16.2.8").unwrap()).to_be(),
                 }
             );
             podIdToVpcIpAddrMap.insert(
                 "client".to_string(),
                 VpcIpAddr { 
                     vpcId: 1, 
-                    ipAddr: u32::from(Ipv4Addr::from_str("192.168.1.8").unwrap()).to_be(), 
+                    ipAddr: u32::from(Ipv4Addr::from_str("172.16.1.8").unwrap()).to_be(), 
                 }
                 
             );
             vpcIpAddrToPodIdMap.insert(
                 VpcIpAddr {
                     vpcId: 1,
-                    ipAddr: u32::from(Ipv4Addr::from_str("192.168.2.8").unwrap()).to_be(),
+                    ipAddr: u32::from(Ipv4Addr::from_str("172.16.2.8").unwrap()).to_be(),
                 },
                 "server".to_string(),
             );
             vpcIpAddrToPodIdMap.insert(
                 VpcIpAddr {
                     vpcId: 1,
-                    ipAddr: u32::from(Ipv4Addr::from_str("192.168.1.8").unwrap()).to_be(),
+                    ipAddr: u32::from(Ipv4Addr::from_str("172.16.1.8").unwrap()).to_be(),
                 },
                 "client".to_string(),
             );
