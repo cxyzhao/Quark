@@ -129,6 +129,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::{env, mem, ptr, thread, time};
 
+use std::net::UdpSocket;
+use std::str;
+
+
 pub static GLOBAL_ALLOCATOR: HostAllocator = HostAllocator::New();
 
 lazy_static! {
@@ -398,6 +402,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hostname = RDMA_CTLINFO.hostname_get();
     let mut events: Vec<EpollEvent> = Vec::with_capacity(1024);
 
+
+    //Add UDP socket for client-to-service ctrl commnunication
+    let srv_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
+    unsafe{
+        let srv_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
+            sin_family: libc::AF_INET as u16,
+            sin_port: 3340u16.to_be(),
+            sin_addr: libc::in_addr {
+                s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
+            },
+            sin_zero: mem::zeroed(),
+        };
+        let result = libc::bind(
+            srv_udp_sock,
+            &srv_udp_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            mem::size_of_val(&srv_udp_addr) as u32,
+        );
+        if result < 0 {
+            libc::close(srv_udp_sock);
+            panic!("last OS error: {:?}", Error::last_os_error());
+        }
+    }
+    println!("srv_udp_sock: {}", srv_udp_sock);
+    epoll_add(epoll_fd, srv_udp_sock, read_event(srv_udp_sock as u64))?;
+    unblock_fd(srv_udp_sock);
+    RDMA_CTLINFO.fds_insert(
+        srv_udp_sock,
+        Srv_FdType::UDPCtrlSocketServer,
+    );
+  
     loop {
         events.clear();
         // println!("in loop");
@@ -664,6 +698,31 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                 std::mem::drop(fds);
                 SetupConnections();
             }
+            Srv_FdType::UDPCtrlSocketServer =>{
+                // Receives a single datagram message on the socket. 
+                let mut buf = [0u8; 64];
+                let mut addr: libc::sockaddr = unsafe { std::mem::zeroed() };
+                let mut addrlen = std::mem::size_of_val(&addr) as libc::socklen_t;
+
+                let bytes_received = unsafe {
+                    libc::recvfrom(
+                        ev.U64 as i32,
+                        buf.as_mut_ptr() as *mut libc::c_void,
+                        buf.len(),
+                        0,
+                        &mut addr as *mut _ as *mut libc::sockaddr,
+                        &mut addrlen,
+                    )
+                };
+                if bytes_received > 1024 {
+                    println!("Receive data len {}", bytes_received);
+                    continue; 
+                }
+                let data = &buf[..bytes_received as usize];
+                let data_str = str::from_utf8(data).unwrap();
+                println!("Received data: {}", data_str);
+                InitContainer_Offload(ev.U64 as i32, buf, addr, addrlen)
+            }
         }
         //println!("Finish processing fd: {}, event: {}", ev.U64, ev.Events);
     }
@@ -796,6 +855,66 @@ fn InitContainer(conn_sock: &UnixSocket, podId: [u8; 64]) {
         )
         .unwrap();
 }
+
+fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, addrlen: libc::socklen_t) {
+    let cliEventFd = unsafe { libc::eventfd(0, 0) };
+    unblock_fd(cliEventFd);
+
+    let rdmaAgentId = RDMA_SRV.agentIdMgr.lock().AllocId().unwrap();
+    let rdmaAgent = RDMAAgent::New(
+        rdmaAgentId,
+        String::new(),
+        ctrl_sock,
+        cliEventFd,
+        podId,
+    );
+    RDMA_SRV
+        .agents
+        .lock()
+        .insert(rdmaAgentId, rdmaAgent.clone());
+    RDMA_SRV
+        .podIdToAgents
+        .lock()
+        .insert(rdmaAgent.podId, rdmaAgent.clone());
+    match RDMA_CTLINFO
+        .podIdToVpcIpAddr
+        .lock()
+        .get(&String::from_utf8(rdmaAgent.podId.to_vec()).unwrap())
+    {
+        Some(vpcIpAddr) => {
+            *rdmaAgent.ipAddr.lock() = vpcIpAddr.ipAddr;
+            *rdmaAgent.vpcId.lock() = vpcIpAddr.vpcId;
+            RDMA_SRV
+                .vpcIpAddrToAgents
+                .lock()
+                .insert(*vpcIpAddr, rdmaAgent.clone());
+        }
+        None => {}
+    }
+
+    RDMA_SRV
+        .sockToAgentIds
+        .lock()
+        .insert(ctrl_sock, rdmaAgentId);
+    let body = [123, rdmaAgentId];
+    let ptr = &body as *const _ as *const u8;
+    let buf = unsafe { slice::from_raw_parts(ptr, 8) };
+
+    // Send back with udp ctrl socket
+    let mut buf = [0u8; 32];
+    buf[0..4].copy_from_slice(&rdmaAgentId.to_le_bytes());
+    unsafe{
+        let res = libc::sendto(ctrl_sock,
+            buf.as_mut_ptr() as *mut libc::c_void,
+            buf.len(),
+               0,
+               &addr as *const _ as *mut libc::sockaddr,
+               addrlen);
+        println!("Send {} back to {}", rdmaAgentId, res);
+    }
+
+}
+
 
 fn SetupConnections() {
     let timestamp = RDMA_CTLINFO.timestamp_get();

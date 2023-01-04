@@ -644,6 +644,7 @@ pub enum Srv_FdType {
     RDMACompletionChannel,
     SrvEventFd(i32),
     NodeEventFd(NodeEvent),
+    UDPCtrlSocketServer,
 }
 
 #[derive(Clone, Debug)]
