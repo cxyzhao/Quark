@@ -58,7 +58,7 @@ impl UnixSocket {
         let cstr = CString::New(path);
         let slice = cstr.Slice();
         for i in 0..slice.len() {
-            server.sun_path[i] = slice[i] as u8;
+            server.sun_path[i] = slice[i] as i8;
         }
 
         let sock = unsafe { socket(AF_UNIX, SOCK_STREAM, 0) };
@@ -123,7 +123,7 @@ impl UnixSocket {
         let cstr = CString::New(path);
         let slice = cstr.Slice();
         for i in 0..slice.len() {
-            server.sun_path[i] = slice[i] as u8;
+            server.sun_path[i] = slice[i] as i8;
         }
 
         let sock = unsafe { socket(AF_UNIX, SOCK_STREAM, 0) };

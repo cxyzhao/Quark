@@ -635,8 +635,10 @@ impl SandboxProcess {
         }
 
         let mut rdmaSvcCliSock = 0;
-        if QUARK_CONFIG.lock().EnableRDMA {
-            rdmaSvcCliSock = unix_socket::UnixSocket::NewClient("/var/quarkrdma/rdma_srv_socket").unwrap();
+        #[cfg(not(offload = "yes"))]{
+            if QUARK_CONFIG.lock().EnableRDMA {
+                rdmaSvcCliSock = unix_socket::UnixSocket::NewClient("/var/quarkrdma/rdma_srv_socket").unwrap();
+            }
         }
 
         let addr = ControlSocketAddr(&self.containerId);

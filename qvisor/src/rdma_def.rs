@@ -3,6 +3,8 @@ use alloc::slice;
 use alloc::sync::Arc;
 use spin::Mutex;
 use std::{mem, ptr};
+use std::io::Error;
+use std::net::UdpSocket;
 use core::sync::atomic::AtomicU32;
 
 use super::qlib::linux_def::*;
@@ -145,6 +147,70 @@ impl RDMASvcClient {
     // }
 
     pub fn initialize(cliSock: i32, localShareAddr: u64, globalShareAddr: u64, podId:[u8; 64]) -> Self {
+        #[cfg(offload = "yes")]{
+            let buf = podId.as_slice();
+            //create and bind client udp socket
+            let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
+            unsafe{
+                let cli_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    sin_port: 3340u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        //192.168.2.3
+                        s_addr: u32::from_be_bytes([192, 168, 2, 3]).to_be(),
+                    },
+                    sin_zero: mem::zeroed(),
+                };
+                let result = libc::bind(
+                    cli_udp_sock,
+                    &cli_udp_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                    mem::size_of_val(&cli_udp_addr) as u32,
+                );
+                if result < 0 {
+                    libc::close(cli_udp_sock);
+                    panic!("last OS error: {:?}", Error::last_os_error());
+                }
+            }
+            unsafe{
+                //rdma_srv's udp port is 3340 
+                let srv_udp_addr: libc::sockaddr_in =  libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    sin_port: 3340u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        //192.168.2.23
+                        s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
+                    },
+                    sin_zero: mem::zeroed(),
+                };
+                let mut addrlen = std::mem::size_of_val(&srv_udp_addr) as libc::socklen_t;
+                let result = libc::sendto(cli_udp_sock,
+                    buf as *const _  as *mut libc::c_void,
+                    buf.len(),
+                    0,
+                    &srv_udp_addr as *const _ as *mut libc::sockaddr,
+                    addrlen);
+                println!("Send to rdma_srv {}", result);
+                if result < 0 {
+                    libc::close(cli_udp_sock);
+                    panic!("last OS error: {:?}", Error::last_os_error());
+                }
+            }
+
+            let cli_sock = UnixSocket { fd: cliSock };
+            let rdmaSvcCli = RDMASvcClient::New(
+                0,
+                0,
+                0,
+                0,
+                0,
+                cli_sock,
+                localShareAddr,
+                globalShareAddr,
+                podId,
+            );
+            rdmaSvcCli
+        }
+        #[cfg(not(offload = "yes"))]{
         // let cli_sock = UnixSocket::NewClient(path).unwrap();
         let cli_sock = UnixSocket { fd: cliSock };
 
@@ -170,6 +236,7 @@ impl RDMASvcClient {
             podId,
         );
         rdmaSvcCli
+        }
     }
 
     pub fn wakeupSvc(&self) {
