@@ -55,6 +55,7 @@ pub mod task_mgr;
 pub mod uring;
 pub mod usage;
 pub mod backtracer;
+pub mod doca;
 
 pub mod kernel;
 pub mod rdma_share;
