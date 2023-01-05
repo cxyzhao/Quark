@@ -1,8 +1,3 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
-// include!(concat!("/home/cxyzhao/host-quark/Quark/qlib/doca/", "bindings.rs"));
 
 use alloc::collections::BTreeMap;
 use alloc::slice;
@@ -20,6 +15,8 @@ use super::qlib::idallocator::IdAllocator;
 use super::vmspace::VMSpace;
 #[cfg(with_doca = "yes")]
 use super::qlib::doca::sample_common::hex_dump;
+#[cfg(with_doca = "yes")]
+use super::qlib::doca::doca_common_util;
 use std::ffi::CStr;
 
 
