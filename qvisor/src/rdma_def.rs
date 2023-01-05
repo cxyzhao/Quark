@@ -1,10 +1,15 @@
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+// include!(concat!("/home/cxyzhao/host-quark/Quark/qlib/doca/", "bindings.rs"));
+
 use alloc::collections::BTreeMap;
 use alloc::slice;
 use alloc::sync::Arc;
 use spin::Mutex;
 use std::{mem, ptr};
 use std::io::Error;
-use std::net::UdpSocket;
 use core::sync::atomic::AtomicU32;
 
 use super::qlib::linux_def::*;
@@ -13,6 +18,10 @@ use super::qlib::rdma_svc_cli::*;
 use super::qlib::unix_socket::UnixSocket;
 use super::qlib::idallocator::IdAllocator;
 use super::vmspace::VMSpace;
+#[cfg(with_doca = "yes")]
+use super::qlib::doca::sample_common::hex_dump;
+use std::ffi::CStr;
+
 
 impl Drop for RDMASvcClient {
     fn drop(&mut self) {
@@ -147,7 +156,17 @@ impl RDMASvcClient {
     // }
 
     pub fn initialize(cliSock: i32, localShareAddr: u64, globalShareAddr: u64, podId:[u8; 64]) -> Self {
-        #[cfg(offload = "yes")]{
+       
+        #[cfg(with_doca = "yes")]{    
+            // Create a buffer of bytes to be dumped
+            let data: &[u8] = &[0x01, 0x02, 0x03, 0x04, 0x05];
+
+            // Call the hex_dump function to get a string representation of the buffer
+            let c_str = unsafe { CStr::from_ptr(hex_dump(data.as_ptr() as *const libc::c_void, data.len())) };
+            // Convert the C string to a Rust string
+            let rust_str = c_str.to_str().expect("failed to convert C string to Rust str");
+            println!("Hex dump: {}", rust_str);
+
             let buf = podId.as_slice();
             //create and bind client udp socket
             let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
@@ -195,6 +214,8 @@ impl RDMASvcClient {
                     panic!("last OS error: {:?}", Error::last_os_error());
                 }
             }
+
+            
 
             let cli_sock = UnixSocket { fd: cliSock };
             let rdmaSvcCli = RDMASvcClient::New(

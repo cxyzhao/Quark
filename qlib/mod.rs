@@ -55,6 +55,8 @@ pub mod task_mgr;
 pub mod uring;
 pub mod usage;
 pub mod backtracer;
+//qkernel (no_std)
+#[cfg(with_doca = "yes")]
 pub mod doca;
 
 pub mod kernel;
