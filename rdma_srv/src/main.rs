@@ -86,6 +86,13 @@ pub mod endpoints_informer;
 pub mod node_informer;
 pub mod pod_informer;
 pub mod service_informer;
+#[cfg(with_doca = "yes")]
+use qlib::doca::sample_common::hex_dump;
+#[cfg(with_doca = "yes")]
+use qlib::doca::doca_common_util;
+#[cfg(with_doca = "yes")]
+use qlib::doca::dma_copy_core::*;
+use std::ffi::CStr;
 
 use crate::qlib::bytestream::ByteStream;
 use crate::rdma_srv::RDMA_CTLINFO;
@@ -911,6 +918,17 @@ fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, 
                &addr as *const _ as *mut libc::sockaddr,
                addrlen);
         println!("Send {} back to {}", rdmaAgentId, res);
+    }
+
+    #[cfg(with_doca = "yes")]{
+        // Create a buffer of bytes to be dumped
+        let data: &[u8] = &[0x01, 0x02, 0x03, 0x04, 0x05];
+
+        // Call the hex_dump function to get a string representation of the buffer
+        let c_str = unsafe { CStr::from_ptr(hex_dump(data.as_ptr() as *const libc::c_void, data.len())) };
+        // Convert the C string to a Rust string
+        let rust_str = c_str.to_str().expect("failed to convert C string to Rust str");
+        println!("Hex dump: {}", rust_str);
     }
 
 }
