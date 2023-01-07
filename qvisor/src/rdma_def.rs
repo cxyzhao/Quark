@@ -157,6 +157,58 @@ impl RDMASvcClient {
     pub fn initialize(cliSock: i32, localShareAddr: u64, globalShareAddr: u64, podId:[u8; 64]) -> Self {
        
         #[cfg(with_doca = "yes")]{
+
+            let buf = podId.as_slice();
+            //create and bind client udp socket
+            let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
+            unsafe{
+                let cli_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    sin_port: 3340u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        //192.168.2.3
+                        s_addr: u32::from_be_bytes([192, 168, 2, 3]).to_be(),
+                    },
+                    sin_zero: mem::zeroed(),
+                };
+                let result = libc::bind(
+                    cli_udp_sock,
+                    &cli_udp_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+                    mem::size_of_val(&cli_udp_addr) as u32,
+                );
+                if result < 0 {
+                    libc::close(cli_udp_sock);
+                    panic!("last OS error: {:?}", Error::last_os_error());
+                }
+            }
+            unsafe{
+                //rdma_srv's udp port is 3340 
+                let srv_udp_addr: libc::sockaddr_in =  libc::sockaddr_in {
+                    sin_family: libc::AF_INET as u16,
+                    sin_port: 3340u16.to_be(),
+                    sin_addr: libc::in_addr {
+                        //192.168.2.23
+                        s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
+                    },
+                    sin_zero: mem::zeroed(),
+                };
+                let mut addrlen = std::mem::size_of_val(&srv_udp_addr) as libc::socklen_t;
+                let result = libc::sendto(cli_udp_sock,
+                    buf as *const _  as *mut libc::c_void,
+                    buf.len(),
+                    0,
+                    &srv_udp_addr as *const _ as *mut libc::sockaddr,
+                    addrlen);
+                println!("Send to rdma_srv {}", result);
+                if result < 0 {
+                    libc::close(cli_udp_sock);
+                    panic!("last OS error: {:?}", Error::last_os_error());
+                }
+            }
+
+
+
+
             // Create a buffer of bytes to be dumped
             let data: &[u8] = &[0x01, 0x02, 0x03, 0x04, 0x05];
 
@@ -182,14 +234,21 @@ impl RDMASvcClient {
                 host_pci_array[i] = c as ::std::os::raw::c_char;
             }
 
+            let file_path_str: &str = "/home/cxyzhao/host-quark/Quark/dma_test_file.txt";
+            let mut file_path_array: [::std::os::raw::c_char; 128] = [0; 128];
+            for (i, c) in file_path_str.chars().enumerate() {
+                file_path_array[i] = c as ::std::os::raw::c_char;
+            }
+
             let mut dma_cfg = dma_copy_cfg {
                 mode: dma_copy_mode_DMA_COPY_MODE_HOST,
-                file_path: [0; 128],
+                file_path: file_path_array,
                 //For Host side
                 cc_dev_pci_addr:  host_pci_array,
                 cc_dev_rep_pci_addr: [0; 8],
-                is_file_found_locally: false,
-                file_size: 0
+                is_file_found_locally: true,
+                //This is file_size of dma_test_file
+                file_size: 1024
             };
 
 
@@ -238,54 +297,15 @@ impl RDMASvcClient {
                 println!("Successfully initialize DOCA core structures");
             }
 
+            /* DMA_COPY_MODE_HOST */
+            result = unsafe{host_start_dma_copy(&mut dma_cfg, &mut dma_core_state, ep_addr, &mut peer_addr_addr)};
+            if result != doca_error_DOCA_SUCCESS {
+                println!("Failed to start host dma copy");
+            } else {
+                println!("Successfully start host dma copy");
+            }
+           
             
-            let buf = podId.as_slice();
-            //create and bind client udp socket
-            let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
-            unsafe{
-                let cli_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
-                    sin_family: libc::AF_INET as u16,
-                    sin_port: 3340u16.to_be(),
-                    sin_addr: libc::in_addr {
-                        //192.168.2.3
-                        s_addr: u32::from_be_bytes([192, 168, 2, 3]).to_be(),
-                    },
-                    sin_zero: mem::zeroed(),
-                };
-                let result = libc::bind(
-                    cli_udp_sock,
-                    &cli_udp_addr as *const libc::sockaddr_in as *const libc::sockaddr,
-                    mem::size_of_val(&cli_udp_addr) as u32,
-                );
-                if result < 0 {
-                    libc::close(cli_udp_sock);
-                    panic!("last OS error: {:?}", Error::last_os_error());
-                }
-            }
-            unsafe{
-                //rdma_srv's udp port is 3340 
-                let srv_udp_addr: libc::sockaddr_in =  libc::sockaddr_in {
-                    sin_family: libc::AF_INET as u16,
-                    sin_port: 3340u16.to_be(),
-                    sin_addr: libc::in_addr {
-                        //192.168.2.23
-                        s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
-                    },
-                    sin_zero: mem::zeroed(),
-                };
-                let mut addrlen = std::mem::size_of_val(&srv_udp_addr) as libc::socklen_t;
-                let result = libc::sendto(cli_udp_sock,
-                    buf as *const _  as *mut libc::c_void,
-                    buf.len(),
-                    0,
-                    &srv_udp_addr as *const _ as *mut libc::sockaddr,
-                    addrlen);
-                println!("Send to rdma_srv {}", result);
-                if result < 0 {
-                    libc::close(cli_udp_sock);
-                    panic!("last OS error: {:?}", Error::last_os_error());
-                }
-            }
 
             
 
