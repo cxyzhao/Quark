@@ -24,6 +24,7 @@ use super::qlib::common::*;
 use super::qlib::cstring::*;
 use super::qlib::unix_socket::*;
 
+
 #[repr(C)]
 union HeaderAlignedBuf {
     // CMSG_SPACE(mem::size_of::<c_int>()) = 24 (linux x86_64),
@@ -47,6 +48,10 @@ impl Drop for UnixSocket {
         }
     }
 }
+#[cfg(not(target_arch = "aarch64"))]
+const USE_AARCH64: bool = false;
+#[cfg(target_arch = "aarch64")]
+const USE_AARCH64: bool = true;
 
 impl UnixSocket {
     pub fn NewServer(path: &str) -> Result<Self> {
@@ -57,8 +62,13 @@ impl UnixSocket {
 
         let cstr = CString::New(path);
         let slice = cstr.Slice();
+        #[cfg(target_arch = "aarch64")]
         for i in 0..slice.len() {
             server.sun_path[i] = slice[i] as u8;
+        }
+        #[cfg(not(target_arch = "aarch64"))]
+        for i in 0..slice.len() {
+            server.sun_path[i] = slice[i] as i8;
         }
 
         let sock = unsafe { socket(AF_UNIX, SOCK_STREAM, 0) };
@@ -122,8 +132,13 @@ impl UnixSocket {
 
         let cstr = CString::New(path);
         let slice = cstr.Slice();
+        #[cfg(target_arch = "aarch64")]
         for i in 0..slice.len() {
             server.sun_path[i] = slice[i] as u8;
+        }
+        #[cfg(not(target_arch = "aarch64"))]
+        for i in 0..slice.len() {
+            server.sun_path[i] = slice[i] as i8;
         }
 
         let sock = unsafe { socket(AF_UNIX, SOCK_STREAM, 0) };

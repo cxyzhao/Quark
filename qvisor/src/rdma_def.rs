@@ -19,7 +19,7 @@ use super::qlib::doca::sample_common::hex_dump;
 use super::qlib::doca::doca_common_util;
 #[cfg(with_doca = "yes")]
 use super::qlib::doca::dma_copy_core::*;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 
 
 impl Drop for RDMASvcClient {
@@ -158,6 +158,10 @@ impl RDMASvcClient {
        
         #[cfg(with_doca = "yes")]{
 
+
+            /*
+            UDP control section
+            */
             let buf = podId.as_slice();
             //create and bind client udp socket
             let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
@@ -205,6 +209,44 @@ impl RDMASvcClient {
                     panic!("last OS error: {:?}", Error::last_os_error());
                 }
             }
+
+
+
+
+            /* Create client MemFd
+                While offloading RDMASrv to BF2,
+                MemFd is created on host-side.
+            */
+            let cli_memfd_name = CString::new("RDMASrvMemFdonHost").expect("CString::new failed for RDMASrvMemFd");
+            let cli_memfd = unsafe { libc::memfd_create(cli_memfd_name.as_ptr(), libc::MFD_ALLOW_SEALING) };
+            if cli_memfd == -1 {
+                panic!(
+                    "fail to create cli_memfd, error is: {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+            let cli_size = mem::size_of::<ClientShareRegion>();
+            println!("ClientShareRegion size is {}", cli_size);
+            let _ret = unsafe { libc::ftruncate(cli_memfd, cli_size as i64) };
+
+
+            /* srv memory region memfd
+                While offloading RDMASrv to BF2,
+                MemFd is created on host-side.
+            */
+            let srv_memfd_name = CString::new("RDMASrvMemFd").expect("CString::new failed for RDMASrvMemFd");
+            let srv_memfd = unsafe { libc::memfd_create(srv_memfd_name.as_ptr(), libc::MFD_ALLOW_SEALING) };
+            // println!("memfd::{}", memfd);
+            if srv_memfd == -1 {
+                panic!(
+                    "fail to create srv_memfd, error is: {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+            let srv_size = mem::size_of::<ShareRegion>();
+            _ret = unsafe { libc::ftruncate(srv_memfd, srv_size as i64) };
+
+         
 
 
 
@@ -304,17 +346,13 @@ impl RDMASvcClient {
             } else {
                 println!("Successfully start host dma copy");
             }
-           
-            
-
-            
-
+  
             let cli_sock = UnixSocket { fd: cliSock };
             let rdmaSvcCli = RDMASvcClient::New(
                 0,
+                srv_memfd,
                 0,
-                0,
-                0,
+                cli_memfd,
                 0,
                 cli_sock,
                 localShareAddr,
