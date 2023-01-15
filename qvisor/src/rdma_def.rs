@@ -19,6 +19,8 @@ use super::qlib::doca::sample_common::hex_dump;
 use super::qlib::doca::doca_common_util;
 #[cfg(with_doca = "yes")]
 use super::qlib::doca::dma_copy_core::*;
+// #[cfg(with_doca = "yes")]
+// use super::qlib::doca::doca_mmap::{doca_mmap_populate};
 use std::ffi::{CStr, CString};
 
 
@@ -157,8 +159,6 @@ impl RDMASvcClient {
     pub fn initialize(cliSock: i32, localShareAddr: u64, globalShareAddr: u64, podId:[u8; 64]) -> Self {
        
         #[cfg(with_doca = "yes")]{
-
-
             /*
             UDP control section
             */
@@ -208,6 +208,26 @@ impl RDMASvcClient {
                     libc::close(cli_udp_sock);
                     panic!("last OS error: {:?}", Error::last_os_error());
                 }
+
+                let mut data_agent_id= [0, 0];
+                //receive agent id
+                let mut addr: libc::sockaddr = unsafe { std::mem::zeroed() };
+                let mut addrlen = std::mem::size_of_val(&addr) as libc::socklen_t;
+                let bytes_received =  unsafe {
+                    libc::recvfrom(
+                        cli_udp_sock,
+                        data_agent_id.as_mut_ptr() as *mut libc::c_void,
+                        data_agent_id.len() *  std::mem::size_of::<u32>(),
+                        0,
+                        &mut addr as *mut _ as *mut libc::sockaddr,
+                        &mut addrlen,
+                    )
+                };
+                if bytes_received < 0 {
+                    libc::close(cli_udp_sock);
+                    panic!("last OS error: {:?}", Error::last_os_error());
+                }
+                println!("{} bytes_received, Received agent id: {}", bytes_received, data_agent_id[1]);
             }
 
 
@@ -227,7 +247,7 @@ impl RDMASvcClient {
             }
             let cli_size = mem::size_of::<ClientShareRegion>();
             println!("ClientShareRegion size is {}", cli_size);
-            let _ret = unsafe { libc::ftruncate(cli_memfd, cli_size as i64) };
+            let mut _ret = unsafe { libc::ftruncate(cli_memfd, cli_size as i64) };
 
 
             /* srv memory region memfd
@@ -247,10 +267,7 @@ impl RDMASvcClient {
             _ret = unsafe { libc::ftruncate(srv_memfd, srv_size as i64) };
 
          
-
-
-
-
+            
             // Create a buffer of bytes to be dumped
             let data: &[u8] = &[0x01, 0x02, 0x03, 0x04, 0x05];
 
@@ -284,6 +301,7 @@ impl RDMASvcClient {
 
             let mut dma_cfg = dma_copy_cfg {
                 mode: dma_copy_mode_DMA_COPY_MODE_HOST,
+                // mode: dma_copy_mode_DMA_COPY_MODE_DPU,
                 file_path: file_path_array,
                 //For Host side
                 cc_dev_pci_addr:  host_pci_array,
@@ -322,6 +340,7 @@ impl RDMASvcClient {
                 println!("Successfully opened DMA device");
             }
             
+            dma_cfg.mode = dma_copy_mode_DMA_COPY_MODE_DPU;
             /* Create DOCA core objects */
             result = unsafe {create_core_objs(&mut dma_core_state,  dma_cfg.mode)};
             // Check the return value of the function
@@ -340,13 +359,56 @@ impl RDMASvcClient {
             }
 
             /* DMA_COPY_MODE_HOST */
+            // host_start_dma_copy is a wrap of completed DMA workflow  
             result = unsafe{host_start_dma_copy(&mut dma_cfg, &mut dma_core_state, ep_addr, &mut peer_addr_addr)};
             if result != doca_error_DOCA_SUCCESS {
                 println!("Failed to start host dma copy");
             } else {
                 println!("Successfully start host dma copy");
             }
-  
+
+            // let mut buffer: *mut ::std::os::raw::c_void;
+            // let mut export_desc: *mut ::std::os::raw::c_char;
+            // let page_size: usize = 1024 * 4; /* DMA memory page size */
+
+            /* allocate a buffer and populate it into the memory map */
+            // result = memory_alloc_and_populate(&mut dma_core_state, dma_cfg.file_size, page_size, &buffer);
+    
+            // let mut doca_mmap_instance = doca_mmap::new(); 
+            // dma_core_state.mmap = &mut doca_mmap_instance as *mut doca_mmap;
+            // buffer = vec![0u8; dma_cfg.file_size as usize].as_mut_ptr() as *mut std::os::raw::c_void;;
+            // result = doca_mmap_populate(dma_core_state.mmap, buffer, dma_cfg.file_size as usize, page_size, std::ptr::null_mut(),std::ptr::null_mut());
+            // if result != doca_error_DOCA_SUCCESS {
+            //     println!("Failed to memory_alloc_and_populate");
+            // }
+
+            // /* Export memory map and send it to DPU */
+            // result = host_export_memory_map_to_dpu(&mut dma_core_state, ep_addr, &mut peer_addr_addr, &export_desc);
+            // if result != doca_error_DOCA_SUCCESS {
+            //     println!("Failed to host_export_memory_map_to_dpu");
+            // }
+
+            // /* Fill the buffer before DPU starts DMA operation */
+            // if (dma_cfg.is_file_found_locally) {
+            //     result = fill_buffer_with_file_content(&mut dma_cfg, buffer);
+            //     if result != doca_error_DOCA_SUCCESS {
+            //         println!("Failed to fill_buffer_with_file_content");
+            //     }
+            // }
+
+            // /* Send source buffer address and offset (entire buffer) to enable DMA and wait until DPU is done */
+            // result = host_send_addr_and_offset(buffer, dma_cfg.file_size, ep_addr, &mut peer_addr_addr); 
+            // if result != doca_error_DOCA_SUCCESS {
+            //     println!("Failed to host_send_addr_and_offset");
+            // }
+
+            // /* Wait to DPU status message to indicate DMA was ended */
+            // result = wait_for_successful_status_msg(ep_addr, &mut peer_addr_addr);
+            // if result != doca_error_DOCA_SUCCESS {
+            //     println!("Failed to wait_for_successful_status_msg");
+            // }
+            // println!("Final status message was successfully received");
+
             let cli_sock = UnixSocket { fd: cliSock };
             let rdmaSvcCli = RDMASvcClient::New(
                 0,
