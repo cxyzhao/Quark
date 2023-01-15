@@ -904,15 +904,15 @@ fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, 
         .lock()
         .insert(ctrl_sock, rdmaAgentId);
     let body = [123, rdmaAgentId];
-    let ptr = &body as *const _ as *const u8;
+    let ptr = body.as_ptr() as *const u8;
     let buf = unsafe { slice::from_raw_parts(ptr, 8) };
 
     // Send back with udp ctrl socket
-    let mut buf = [0u8; 32];
-    buf[0..4].copy_from_slice(&rdmaAgentId.to_le_bytes());
+    // let mut buf = [123, rdmaAgentId];
+    // buf[0..4].copy_from_slice(&rdmaAgentId.to_le_bytes());
     unsafe{
         let res = libc::sendto(ctrl_sock,
-            buf.as_mut_ptr() as *mut libc::c_void,
+            buf.as_ptr() as *const libc::c_void,
             buf.len(),
                0,
                &addr as *const _ as *mut libc::sockaddr,
