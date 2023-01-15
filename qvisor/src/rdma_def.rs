@@ -136,6 +136,120 @@ impl RDMASvcClient {
         }
     }
 
+    /*
+    Overload New function
+    Here, mmap is done before New is invoked, so cliShareAddr and srvShareAddr are parameter.
+    The purpose of this New functions is to save one round trip communcation of cli-agent for 
+    offloading case
+    */
+    fn New_WithMemAddr(
+        srvEventFd: i32,
+        srvMemFd: i32,
+        cliEventFd: i32,
+        cliMemFd: i32,
+        agentId: u32,
+        cliSock: UnixSocket,
+        localShareAddr: u64,
+        globalShareAddr: u64,
+        podId: [u8; 64],
+        cliShareAddr: *mut libc::c_void,
+        srvShareAddr: *mut libc::c_void,
+    ) -> Self {
+        let cliShareSize = mem::size_of::<ClientShareRegion>();
+        // debug!("RDMASvcClient::New, cli size: {:x}", cliShareSize);
+        // debug!("RDMASvcClient::New, srv size: {:x}", mem::size_of::<ShareRegion>());
+        // debug!("RDMASvcClient::New, ioBuffer: {:x}", mem::size_of::<IOBuf>());
+        // debug!("RDMASvcClient::New, IOMetas: {:x}", mem::size_of::<IOMetas>());
+        // debug!("RDMASvcClient::New, RingQueue<RDMAResp>: {:x}", mem::size_of::<RingQueue<RDMAResp>>());
+        // debug!("RDMASvcClient::New, RingQueue<RDMAResp>: {:x}", mem::size_of::<RingQueue<RDMAReq>>());
+        // debug!("RDMASvcClient::New, RDMAResp: {:x}", mem::size_of::<RDMAResp>());
+        // debug!("RDMASvcClient::New, RDMAReq: {:x}", mem::size_of::<RDMAReq>());
+
+        // let cliShareAddr = unsafe {
+        //     libc::mmap(
+        //         if localShareAddr == 0 {
+        //             ptr::null_mut()
+        //         } else {
+        //             localShareAddr as *mut libc::c_void
+        //         },
+        //         cliShareSize,
+        //         libc::PROT_READ | libc::PROT_WRITE,
+        //         if localShareAddr == 0 {
+        //             libc::MAP_SHARED
+        //         } else {
+        //             libc::MAP_SHARED | libc::MAP_FIXED
+        //         },
+        //         cliMemFd,
+        //         0,
+        //     )
+        // };
+
+        assert!(cliShareAddr as u64 == localShareAddr || localShareAddr == 0);
+
+        let cliShareRegion = unsafe { &mut (*(cliShareAddr as *mut ClientShareRegion)) };
+        let udpBufferAllocator = UDPBufferAllocator::New(
+            &cliShareRegion.udpBufSent as *const _ as u64,
+            UDP_RECV_PACKET_COUNT as u32,
+        );
+        let cliShareRegion = Mutex::new(cliShareRegion);
+
+        let srvShareSize = mem::size_of::<ShareRegion>();
+        // let srvShareAddr = unsafe {
+        //     libc::mmap(
+        //         if globalShareAddr == 0 {
+        //             ptr::null_mut()
+        //         } else {
+        //             globalShareAddr as *mut libc::c_void
+        //         },
+        //         srvShareSize,
+        //         libc::PROT_READ | libc::PROT_WRITE,
+        //         if globalShareAddr == 0 {
+        //             libc::MAP_SHARED
+        //         } else {
+        //             libc::MAP_SHARED | libc::MAP_FIXED
+        //         },
+        //         srvMemFd,
+        //         0,
+        //     )
+        // };
+        assert!(srvShareAddr as u64 == globalShareAddr || globalShareAddr == 0);
+
+        let srvShareRegion = unsafe { &mut (*(srvShareAddr as *mut ShareRegion)) };
+        let srvShareRegion = Mutex::new(srvShareRegion);
+        RDMASvcClient {
+            intern: Arc::new(RDMASvcCliIntern {
+                agentId,
+                cliSock,
+                cliMemFd,
+                srvMemFd,
+                srvEventFd,
+                cliEventFd,
+                cliMemRegion: MemRegion {
+                    addr: cliShareAddr as u64,
+                    len: cliShareSize as u64,
+                },
+                cliShareRegion,
+                srvMemRegion: MemRegion {
+                    addr: srvShareAddr as u64,
+                    len: srvShareSize as u64,
+                },
+                srvShareRegion,
+                channelToSocketMappings: Mutex::new(BTreeMap::new()),
+                rdmaIdToSocketMappings: Mutex::new(BTreeMap::new()),
+                nextRDMAId: AtomicU32::new(0),
+                podId,
+                udpSentBufferAllocator: Mutex::new(udpBufferAllocator),
+                portToFdInfoMappings: Mutex::new(BTreeMap::new()),
+
+                //refer to: https://www.kernel.org/doc/html/latest//networking/ip-sysctl.html#ip-variables
+                //"The default values are 32768 and 60999 respectively."
+                tcpPortAllocator: Mutex::new(IdAllocator::New(32768, 28232)), // 60999 - 32768 + 1 = 28231 + 1 = 28232
+                udpPortAllocator: Mutex::new(IdAllocator::New(32768, 28232)), // 60999 - 32768 + 1 = 28231 + 1 = 28232
+                // timestamp: Mutex::new(Vec::with_capacity(16)),
+            }),
+        }
+    }
+
     // pub fn init(path: &str) -> RDMASvcClient {
     //     let cli_sock = UnixSocket::NewClient(path).unwrap();
 
@@ -185,6 +299,8 @@ impl RDMASvcClient {
                     panic!("last OS error: {:?}", Error::last_os_error());
                 }
             }
+            //agent_id is data_agent_id[1]
+            let mut data_agent_id= [0, 0];
             unsafe{
                 //rdma_srv's udp port is 3340 
                 let srv_udp_addr: libc::sockaddr_in =  libc::sockaddr_in {
@@ -209,7 +325,6 @@ impl RDMASvcClient {
                     panic!("last OS error: {:?}", Error::last_os_error());
                 }
 
-                let mut data_agent_id= [0, 0];
                 //receive agent id
                 let mut addr: libc::sockaddr = unsafe { std::mem::zeroed() };
                 let mut addrlen = std::mem::size_of_val(&addr) as libc::socklen_t;
@@ -248,6 +363,26 @@ impl RDMASvcClient {
             let cli_size = mem::size_of::<ClientShareRegion>();
             println!("ClientShareRegion size is {}", cli_size);
             let mut _ret = unsafe { libc::ftruncate(cli_memfd, cli_size as i64) };
+            
+            let cliShareSize = mem::size_of::<ClientShareRegion>();
+            let cliShareAddr = unsafe {
+                libc::mmap(
+                    if localShareAddr == 0 {
+                        ptr::null_mut()
+                    } else {
+                        localShareAddr as *mut libc::c_void
+                    },
+                    cliShareSize,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    if localShareAddr == 0 {
+                        libc::MAP_SHARED
+                    } else {
+                        libc::MAP_SHARED | libc::MAP_FIXED
+                    },
+                    cli_memfd,
+                    0,
+                )
+            };
 
 
             /* srv memory region memfd
@@ -265,6 +400,46 @@ impl RDMASvcClient {
             }
             let srv_size = mem::size_of::<ShareRegion>();
             _ret = unsafe { libc::ftruncate(srv_memfd, srv_size as i64) };
+
+            let srvShareSize = mem::size_of::<ShareRegion>();
+            let srvShareAddr = unsafe {
+                libc::mmap(
+                    if globalShareAddr == 0 {
+                        ptr::null_mut()
+                    } else {
+                        globalShareAddr as *mut libc::c_void
+                    },
+                    srvShareSize,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    if globalShareAddr == 0 {
+                        libc::MAP_SHARED
+                    } else {
+                        libc::MAP_SHARED | libc::MAP_FIXED
+                    },
+                    srv_memfd,
+                    0,
+                )
+            };
+            
+            println!("cliShareAddr {:?} {}", cliShareAddr as usize, std::mem::size_of::<*mut libc::c_void>());
+            println!("srvShareAddr {:?} {}", srvShareAddr as usize, std::mem::size_of::<*mut libc::c_void>());
+    
+            let cli_sock = UnixSocket { fd: cliSock };
+            let rdmaSvcCli = RDMASvcClient::New_WithMemAddr(
+                0,
+                srv_memfd,
+                0,
+                cli_memfd,
+                0,
+                cli_sock,
+                localShareAddr,
+                globalShareAddr,
+                podId,
+                cliShareAddr,
+                srvShareAddr
+            );
+
+
 
          
             
@@ -409,18 +584,7 @@ impl RDMASvcClient {
             // }
             // println!("Final status message was successfully received");
 
-            let cli_sock = UnixSocket { fd: cliSock };
-            let rdmaSvcCli = RDMASvcClient::New(
-                0,
-                srv_memfd,
-                0,
-                cli_memfd,
-                0,
-                cli_sock,
-                localShareAddr,
-                globalShareAddr,
-                podId,
-            );
+    
             return rdmaSvcCli;
         }
         #[cfg(not(offload = "yes"))]{
