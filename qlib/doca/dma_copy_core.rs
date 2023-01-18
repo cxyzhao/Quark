@@ -3191,9 +3191,8 @@ extern "C" {
         core_state: *mut core_state,
         buffer: *mut ::std::os::raw::c_char,
         buffer_len: u32,
-        export_desc: *mut ::std::os::raw::c_char,
         export_desc_len: *mut usize,
-    ) -> doca_error_t;
+    ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
     pub fn inventory_buf(
@@ -3307,7 +3306,6 @@ pub struct doca_dma {
 pub struct doca_workq {
     pub _address: u8,
 }
-
 impl  doca_comm_channel_ep_t {
     pub fn new() ->  doca_comm_channel_ep_t {
         doca_comm_channel_ep_t { _unused: [] }
@@ -3333,3 +3331,4 @@ impl  doca_buf {
         doca_buf { _unused: [] }
     }
 }
+

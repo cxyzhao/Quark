@@ -19,8 +19,8 @@ use super::qlib::doca::sample_common::hex_dump;
 use super::qlib::doca::doca_common_util;
 #[cfg(with_doca = "yes")]
 use super::qlib::doca::dma_copy_core::*;
-// #[cfg(with_doca = "yes")]
-// use super::qlib::doca::doca_mmap::{doca_mmap_populate};
+#[cfg(with_doca = "yes")]
+use super::qlib::doca::doca_mmap::{doca_mmap_populate, doca_mmap_export, doca_mmap};
 use std::ffi::{CStr, CString};
 
 
@@ -301,17 +301,20 @@ impl RDMASvcClient {
             }
             //agent_id is data_agent_id[1]
             let mut data_agent_id= [0, 0];
+            //rdma_srv's udp port is 3340 
+            let srv_udp_addr: libc::sockaddr_in =  unsafe{ 
+                libc::sockaddr_in {
+                sin_family: libc::AF_INET as u16,
+                sin_port: 3340u16.to_be(),
+                sin_addr: libc::in_addr {
+                    //192.168.2.23
+                    s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
+                },
+                sin_zero: mem::zeroed(),
+                }
+            };
+            //send pod id
             unsafe{
-                //rdma_srv's udp port is 3340 
-                let srv_udp_addr: libc::sockaddr_in =  libc::sockaddr_in {
-                    sin_family: libc::AF_INET as u16,
-                    sin_port: 3340u16.to_be(),
-                    sin_addr: libc::in_addr {
-                        //192.168.2.23
-                        s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
-                    },
-                    sin_zero: mem::zeroed(),
-                };
                 let mut addrlen = std::mem::size_of_val(&srv_udp_addr) as libc::socklen_t;
                 let result = libc::sendto(cli_udp_sock,
                     buf as *const _  as *mut libc::c_void,
@@ -324,8 +327,10 @@ impl RDMASvcClient {
                     libc::close(cli_udp_sock);
                     panic!("last OS error: {:?}", Error::last_os_error());
                 }
+            }
 
-                //receive agent id
+            //receive agent id
+            unsafe{
                 let mut addr: libc::sockaddr = unsafe { std::mem::zeroed() };
                 let mut addrlen = std::mem::size_of_val(&addr) as libc::socklen_t;
                 let bytes_received =  unsafe {
@@ -346,12 +351,11 @@ impl RDMASvcClient {
             }
 
 
-
-
             /* Create client MemFd
                 While offloading RDMASrv to BF2,
                 MemFd is created on host-side.
             */
+
             let cli_memfd_name = CString::new("RDMASrvMemFdonHost").expect("CString::new failed for RDMASrvMemFd");
             let cli_memfd = unsafe { libc::memfd_create(cli_memfd_name.as_ptr(), libc::MFD_ALLOW_SEALING) };
             if cli_memfd == -1 {
@@ -423,7 +427,10 @@ impl RDMASvcClient {
             
             println!("cliShareAddr {:?} {}", cliShareAddr as usize, std::mem::size_of::<*mut libc::c_void>());
             println!("srvShareAddr {:?} {}", srvShareAddr as usize, std::mem::size_of::<*mut libc::c_void>());
-    
+            
+            
+
+
             let cli_sock = UnixSocket { fd: cliSock };
             let rdmaSvcCli = RDMASvcClient::New_WithMemAddr(
                 0,
@@ -483,7 +490,8 @@ impl RDMASvcClient {
                 cc_dev_rep_pci_addr: [0; 8],
                 is_file_found_locally: true,
                 //This is file_size of dma_test_file
-                file_size: 1024
+                file_size: 1024,
+                cpy_num: 1,
             };
 
 
@@ -533,26 +541,46 @@ impl RDMASvcClient {
                 println!("Successfully initialize DOCA core structures");
             }
 
-            /* DMA_COPY_MODE_HOST */
-            // host_start_dma_copy is a wrap of completed DMA workflow  
-            result = unsafe{host_start_dma_copy(&mut dma_cfg, &mut dma_core_state, ep_addr, &mut peer_addr_addr)};
-            if result != doca_error_DOCA_SUCCESS {
-                println!("Failed to start host dma copy");
-            } else {
-                println!("Successfully start host dma copy");
+            // /* DMA_COPY_MODE_HOST */
+            // // host_start_dma_copy is a wrap of completed DMA workflow  
+            // result = unsafe{host_start_dma_copy(&mut dma_cfg, &mut dma_core_state, ep_addr, &mut peer_addr_addr)};
+            // if result != doca_error_DOCA_SUCCESS {
+            //     println!("Failed to start host dma copy");
+            // } else {
+            //     println!("Successfully start host dma copy");
+            // }
+
+            let mut buffer: *mut ::std::os::raw::c_void; 
+            // let mut export_desc = [1u8; 1024];
+            let mut export_desc_len = 0 as usize;
+            let page_size: usize = 1024 * 4; /* DMA memory page size */
+            let cliShareAddr_charptr: *mut ::std::os::raw::c_char = unsafe{ mem::transmute(cliShareAddr) };
+            let mut export_desc = unsafe {
+                populate_and_export_local_buffer(&mut dma_cfg, &mut dma_core_state, 
+                    cliShareAddr_charptr,  cli_size as u32, 
+                    //export_desc.as_mut_ptr() as *mut ::std::os::raw::c_char, &mut export_desc_len);
+                    &mut export_desc_len)
+            };
+            // let export_desc = &mut export_desc[..export_desc_len];
+
+            // println!("len {} export_desc {}", export_desc_len, std::str::from_utf8(&export_desc).unwrap());
+            println!("len {}", export_desc_len);
+            
+            unsafe{
+                let export_desc_slice = slice::from_raw_parts(export_desc, export_desc_len);
+                println!("{:?}", export_desc_slice);
             }
 
-            // let mut buffer: *mut ::std::os::raw::c_void;
-            // let mut export_desc: *mut ::std::os::raw::c_char;
-            // let page_size: usize = 1024 * 4; /* DMA memory page size */
+            let mut local_doca_buf = doca_buf::new();
+            let mut local_doca_buf_addr : *mut doca_buf = &mut local_doca_buf as *mut doca_buf;
+            result = unsafe{
+                inventory_buf(&mut dma_core_state, dma_core_state.mmap, cliShareAddr_charptr, cli_size, local_doca_buf_addr)
+            };
 
-            /* allocate a buffer and populate it into the memory map */
-            // result = memory_alloc_and_populate(&mut dma_core_state, dma_cfg.file_size, page_size, &buffer);
-    
-            // let mut doca_mmap_instance = doca_mmap::new(); 
+            /* populate cliShareAddr into the memory map */
+            // let mut doca_mmap_instance = doca_mmap::new();;
             // dma_core_state.mmap = &mut doca_mmap_instance as *mut doca_mmap;
-            // buffer = vec![0u8; dma_cfg.file_size as usize].as_mut_ptr() as *mut std::os::raw::c_void;;
-            // result = doca_mmap_populate(dma_core_state.mmap, buffer, dma_cfg.file_size as usize, page_size, std::ptr::null_mut(),std::ptr::null_mut());
+            // result = unsafe { doca_mmap_populate(dma_core_state.mmap, cliShareAddr, cli_size as usize, page_size, std::ptr::null_mut(),std::ptr::null_mut()) };
             // if result != doca_error_DOCA_SUCCESS {
             //     println!("Failed to memory_alloc_and_populate");
             // }
@@ -584,7 +612,6 @@ impl RDMASvcClient {
             // }
             // println!("Final status message was successfully received");
 
-    
             return rdmaSvcCli;
         }
         #[cfg(not(offload = "yes"))]{
