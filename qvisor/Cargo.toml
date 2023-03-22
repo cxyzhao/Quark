@@ -80,6 +80,3 @@ debug-assertions = false
 [[bin]]
 name = "quark"
 path = "src/main.rs"
-
-[build-dependencies]
-bindgen = "0.55.0"
