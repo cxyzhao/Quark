@@ -25,6 +25,7 @@ use std::str::FromStr;
 use std::{env, mem, ptr, thread, time};
 use std::time::Duration;
 use std::thread::sleep;
+use libc::{shm_open, mmap, ftruncate, c_char, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED, O_RDWR};
 
 use super::id_mgr::IdMgr;
 use super::qlib::common::*;
@@ -127,8 +128,12 @@ impl RDMAAgent {
         clientEventfd: i32,
         podId: [u8; 64],
     ) -> Self {
-        let memfdname = CString::new("RDMASrvMemFd").expect("CString::new failed for RDMASrvMemFd");
-        let memfd = unsafe { libc::memfd_create(memfdname.as_ptr(), libc::MFD_ALLOW_SEALING) };
+        // let memfdname = CString::new("RDMASrvMemFd").expect("CString::new failed for RDMASrvMemFd");
+        // let memfd = unsafe { libc::memfd_create(memfdname.as_ptr(), libc::MFD_ALLOW_SEALING) };
+
+        const memfdname   : *const c_char = b"/SharedMemRegionWithBroker\0".as_ptr() as *const c_char;
+        let memfd = unsafe { shm_open(memfdname, O_RDWR, libc::S_IRUSR | libc::S_IWUSR) };
+
         let size = mem::size_of::<ClientShareRegion>();
         let _ret = unsafe { libc::ftruncate(memfd, size as i64) };
         let addr = unsafe {

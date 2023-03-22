@@ -907,6 +907,9 @@ fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, 
     let ptr = body.as_ptr() as *const u8;
     let buf = unsafe { slice::from_raw_parts(ptr, 8) };
 
+    println!("srvMemRegion addr {:?}", RDMA_SRV.srvMemRegion.addr as usize);
+    println!("rdmaAgent shareMemRegion {:?}", rdmaAgent.shareMemRegion.addr);
+
     // Send back with udp ctrl socket
     // let mut buf = [123, rdmaAgentId];
     // buf[0..4].copy_from_slice(&rdmaAgentId.to_le_bytes());
