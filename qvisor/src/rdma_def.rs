@@ -428,15 +428,21 @@ impl RDMASvcClient {
             println!("srvShareAddr {:?} {}", srvShareAddr as usize, std::mem::size_of::<*mut libc::c_void>());
             
             
+            /* srveventfd / clieventfd
+                While offloading RDMASrv to BF2,
+                MemFd is created on host-side.
+            */
+            let srveventfd  = unsafe { libc::eventfd(0, 0) };
+            let clieventfd  = unsafe { libc::eventfd(0, 0) };
 
 
             let cli_sock = UnixSocket { fd: cliSock };
             let rdmaSvcCli = RDMASvcClient::New_WithMemAddr(
-                0,
+                srveventfd,
                 srv_memfd,
-                0,
+                clieventfd,
                 cli_memfd,
-                0,
+                data_agent_id[1],
                 cli_sock,
                 localShareAddr,
                 globalShareAddr,
