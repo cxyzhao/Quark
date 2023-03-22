@@ -433,8 +433,9 @@ impl RDMASvcClient {
                 MemFd is created on host-side.
             */
             let srveventfd  = unsafe { libc::eventfd(0, 0) };
+            VMSpace::UnblockFd(srveventfd);
             let clieventfd  = unsafe { libc::eventfd(0, 0) };
-
+            VMSpace::UnblockFd(clieventfd);
 
             let cli_sock = UnixSocket { fd: cliSock };
             let rdmaSvcCli = RDMASvcClient::New_WithMemAddr(
@@ -450,7 +451,7 @@ impl RDMASvcClient {
                 cliShareAddr,
                 srvShareAddr
             );
-
+            
             return rdmaSvcCli;
         }
         #[cfg(not(offload = "yes"))]{

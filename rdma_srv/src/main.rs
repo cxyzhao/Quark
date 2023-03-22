@@ -151,9 +151,18 @@ macro_rules! syscall {
         }
     }};
 }
-
+#[cfg(offload = "yes")]
 #[repr(C)]
 // #[repr(packed)]
+#[derive(Default, Copy, Clone, Debug)]
+pub struct EpollEvent {
+    pub Events: u32,
+    pub U64: u64,
+}
+
+#[cfg(not(offload = "yes"))]
+#[repr(C)]
+#[repr(packed)]
 #[derive(Default, Copy, Clone, Debug)]
 pub struct EpollEvent {
     pub Events: u32,
@@ -175,7 +184,12 @@ pub const IO_WAIT_CYCLES: i64 = 100_000_000; // 1ms
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("RDMA Service is starting!");
-    RDMA.Init("mlx5_2", 1);
+    #[cfg(offload = "yes")]{
+        RDMA.Init("mlx5_2", 1);
+    }
+    #[cfg(not(offload = "yes"))]{
+        RDMA.Init("rocep152s0f0", 1);
+    }
     let hostname_os = hostname::get()?;
     match hostname_os.into_string() {
         Ok(v) => RDMA_CTLINFO.hostname_set(v),
@@ -323,8 +337,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if args.len() > 1 {
                 // let peerIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
                 // let localIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
-                let peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
-                let localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                let peerIpAddr;
+                let localIpAddr;
+                #[cfg(offload = "yes")]{
+                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                }
+                #[cfg(not(offload = "yes"))]{
+                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                }
+                
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&peerIpAddr);
                 SetupConnection(&localIpAddr);
@@ -338,7 +361,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //     sin_zero: mem::zeroed(),
                 // };
             } else {
-                let localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                let localIpAddr;
+                #[cfg(offload = "yes")]{
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                }
+                #[cfg(not(offload = "yes"))]{
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                }
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&localIpAddr);
             }
@@ -407,11 +436,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //Add UDP socket for client-to-service ctrl commnunication
     let srv_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
     unsafe{
+        let udp_s_addr;
+        #[cfg(offload = "yes")]{
+            udp_s_addr = u32::from_be_bytes([192, 168, 2, 23]).to_be();
+        }
+        #[cfg(not(offload = "yes"))]{
+            udp_s_addr = u32::from_be_bytes([192, 168, 2, 3]).to_be();
+        }
         let srv_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
             sin_port: 3340u16.to_be(),
             sin_addr: libc::in_addr {
-                s_addr: u32::from_be_bytes([192, 168, 2, 23]).to_be(),
+                s_addr: udp_s_addr,
             },
             sin_zero: mem::zeroed(),
         };

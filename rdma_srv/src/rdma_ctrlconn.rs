@@ -98,7 +98,13 @@ impl Default for CtrlInfo {
         let isK8s = false;
         if !isK8s {
             //let lab1ip = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
-            let lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
+            let lab1ip;
+            #[cfg(offload = "yes")]{
+                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
+            }
+            #[cfg(not(offload = "yes"))]{
+                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
+            }
             let node1 = Node {
                 hostname: String::from("lab 1"),
                 ipAddr: lab1ip,
@@ -108,7 +114,13 @@ impl Default for CtrlInfo {
                 resource_version: 0,
             };
             //let lab2ip = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
-            let lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+            let lab2ip;
+            #[cfg(offload = "yes")]{
+                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+            }
+            #[cfg(not(offload = "yes"))]{
+                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+            }
             let node2 = Node {
                 hostname: String::from("lab 2"),
                 ipAddr: lab2ip,

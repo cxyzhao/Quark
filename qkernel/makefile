@@ -26,6 +26,7 @@ $(kernel_debug): kernel_debug $(assembly_object_files)
 
 kernel:
 	RUSTFLAGS='--cfg offload="yes"' CARGO_TARGET_DIR=../target cargo xbuild --target x86_64-qkernel.json --release
+	#CARGO_TARGET_DIR=../target cargo xbuild --target x86_64-qkernel.json --release
 
 kernel_debug:
 	CARGO_TARGET_DIR=../target cargo xbuild --target x86_64-qkernel.json
