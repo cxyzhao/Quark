@@ -86,12 +86,6 @@ pub mod endpoints_informer;
 pub mod node_informer;
 pub mod pod_informer;
 pub mod service_informer;
-#[cfg(with_doca = "yes")]
-use qlib::doca::sample_common::hex_dump;
-#[cfg(with_doca = "yes")]
-use qlib::doca::doca_common_util;
-#[cfg(with_doca = "yes")]
-use qlib::doca::dma_copy_core::*;
 use std::ffi::CStr;
 
 use crate::qlib::bytestream::ByteStream;
@@ -921,109 +915,6 @@ fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, 
                &addr as *const _ as *mut libc::sockaddr,
                addrlen);
         println!("Send {} back to {}", rdmaAgentId, res);
-    }
-
-    #[cfg(with_doca = "yes")]{
-        // Create a buffer of bytes to be dumped
-        let data: &[u8] = &[0x01, 0x02, 0x03, 0x04, 0x05];
-
-        // Call the hex_dump function to get a string representation of the buffer
-        let c_str = unsafe { CStr::from_ptr(hex_dump(data.as_ptr() as *const libc::c_void, data.len())) };
-        // Convert the C string to a Rust string
-        let rust_str = c_str.to_str().expect("failed to convert C string to Rust str");
-        println!("Hex dump: {}", rust_str);
-
-        let mut dma_core_state = core_state {
-            dev: std::ptr::null_mut(),
-            mmap: std::ptr::null_mut(),
-            buf_inv: std::ptr::null_mut(),
-            ctx: std::ptr::null_mut(),
-            dma_ctx: std::ptr::null_mut(),
-            workq: std::ptr::null_mut(),
-        };
-
-        
-        let host_pci: &str = "98:00.0";
-        let mut host_pci_array: [::std::os::raw::c_char; 8] = [0; 8];
-        for (i, c) in host_pci.chars().enumerate() {
-            host_pci_array[i] = c as ::std::os::raw::c_char;
-        }
-
-        let dpu_pci: &str = "03:00.0";
-        let mut dpu_pci_array: [::std::os::raw::c_char; 8] = [0; 8];
-        for (i, c) in dpu_pci.chars().enumerate() {
-            dpu_pci_array[i] = c as ::std::os::raw::c_char;
-        }
-
-        let file_path_str: &str = "/home/ubuntu/bf2-quark/Quark/dma_test_file.txt";
-        let mut file_path_array: [::std::os::raw::c_char; 128] = [0; 128];
-        for (i, c) in file_path_str.chars().enumerate() {
-            file_path_array[i] = c as ::std::os::raw::c_char;
-        }
-
-        let mut dma_cfg = dma_copy_cfg {
-            mode: dma_copy_mode_DMA_COPY_MODE_DPU,
-            file_path: file_path_array,
-            //For dpu side
-            cc_dev_pci_addr:  dpu_pci_array,
-            cc_dev_rep_pci_addr: host_pci_array,
-            is_file_found_locally: false,
-            file_size: 1024
-        };
-
-
-        let mut ep = doca_comm_channel_ep_t::new();
-        let mut ep_addr : *mut doca_comm_channel_ep_t = &mut ep as *mut doca_comm_channel_ep_t;
-        let mut cc_dev = doca_dev::new();
-        let mut cc_dev_addr : *mut doca_dev = &mut cc_dev as *mut doca_dev;
-        let mut cc_dev_rep = doca_dev_rep::new();
-        let mut cc_dev_rep_addr : *mut doca_dev_rep = &mut cc_dev_rep as *mut doca_dev_rep;
-        let mut peer_addr = doca_comm_channel_addr_t::new();
-        let mut peer_addr_addr : *mut doca_comm_channel_addr_t = &mut peer_addr as *mut doca_comm_channel_addr_t;
-
-
-        /* Init Comm Channel */
-        let mut result = unsafe{init_cc(&mut dma_cfg, &mut ep_addr, &mut cc_dev_addr, &mut cc_dev_rep_addr)};
-        // Check the return value of the function
-        if result != doca_error_DOCA_SUCCESS {
-            println!("Failed to initiate Comm Channel");
-        } else {
-            println!("Successfully initiate Comm Channel");
-        }
-
-        /* Open DOCA dma device */
-        result = unsafe { open_dma_device(&mut dma_core_state.dev) };
-        // Check the return value of the function
-        if result != doca_error_DOCA_SUCCESS {
-            println!("Failed to open DMA device");
-        } else {
-            println!("Successfully opened DMA device");
-        }
-        
-        /* Create DOCA core objects */
-        result = unsafe {create_core_objs(&mut dma_core_state,  dma_cfg.mode)};
-        // Check the return value of the function
-        if result != doca_error_DOCA_SUCCESS {
-            println!("Failed to create DOCA core structures");
-        } else {
-            println!("Successfully  create DOCA core structures");
-        }
-
-        /* Init DOCA core objects */
-        result = unsafe{init_core_objs(&mut dma_core_state, &mut dma_cfg)};
-        if result != doca_error_DOCA_SUCCESS {
-            println!("Failed to initialize DOCA core structures");
-        } else {
-            println!("Successfully initialize DOCA core structures");
-        }
-
-        /* DMA_COPY_MODE_DPU */
-        result = unsafe{dpu_start_dma_copy(&mut dma_cfg, &mut dma_core_state, ep_addr, &mut peer_addr_addr)};
-        if result != doca_error_DOCA_SUCCESS {
-            println!("Failed to start dpu dma copy");
-        } else {
-            println!("Successfully start dpu dma copy");
-        }
     }
 
 }
