@@ -2938,7 +2938,8 @@ impl MemoryDef {
     pub const PGD_SHIFT: usize = 39;
 
     // used for socket/tty buffer
-    pub const DEFAULT_BUF_PAGE_COUNT: u64 = 16;
+    //DONE(cxyzhao) INCR SKB BUF
+    pub const DEFAULT_BUF_PAGE_COUNT: u64 = 256;
 
     pub const PTE_MASK: u64 = 0x1ff << Self::PTE_SHIFT;
     pub const PMD_MASK: u64 = 0x1ff << Self::PMD_SHIFT;
