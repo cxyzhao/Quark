@@ -1078,5 +1078,6 @@ fn gen_eventfd() -> RawFd {
     let client_sendfd_sock_fd = UnixSocket::NewClient("/EVENTFDSOCKET").unwrap();
     let client_sendfd_sock = UnixSocket { fd: client_sendfd_sock_fd };
     let res = client_sendfd_sock.SendFd(efd.as_raw_fd());
+    drop(client_sendfd_sock);
     efd
 }

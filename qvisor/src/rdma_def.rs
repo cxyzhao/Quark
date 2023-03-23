@@ -13,8 +13,10 @@ use super::qlib::rdma_svc_cli::*;
 use super::qlib::unix_socket::UnixSocket;
 use super::qlib::idallocator::IdAllocator;
 use super::vmspace::VMSpace;
+use super::unix_socket_def::*;
 use std::ffi::{CStr, CString};
 use libc::{shm_open, mmap, ftruncate, c_char, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED, O_RDWR};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 impl Drop for RDMASvcClient {
     fn drop(&mut self) {
@@ -262,6 +264,17 @@ impl RDMASvcClient {
     //     rdmaSvcCli
     // }
 
+    fn gen_eventfd() -> RawFd {
+
+        let efd = unsafe { libc::eventfd(0, 0) };
+    
+        let client_sendfd_sock_fd = UnixSocket::NewClient("/EVENTFDSOCKET").unwrap();
+        let client_sendfd_sock = UnixSocket { fd: client_sendfd_sock_fd };
+        let res = client_sendfd_sock.SendFd(efd.as_raw_fd());
+        drop(client_sendfd_sock);
+        efd
+    }
+
     pub fn initialize(cliSock: i32, localShareAddr: u64, globalShareAddr: u64, podId:[u8; 64]) -> Self {
        
         #[cfg(offload = "yes")]{
@@ -432,9 +445,12 @@ impl RDMASvcClient {
                 While offloading RDMASrv to BF2,
                 MemFd is created on host-side.
             */
+            //TODO(trigger broker eventfd)
             let srveventfd  = unsafe { libc::eventfd(0, 0) };
             VMSpace::UnblockFd(srveventfd);
-            let clieventfd  = unsafe { libc::eventfd(0, 0) };
+            let clieventfd;
+            // let clieventfd  = unsafe { libc::eventfd(0, 0) };
+            clieventfd = unsafe { Self::gen_eventfd() };
             VMSpace::UnblockFd(clieventfd);
 
             let cli_sock = UnixSocket { fd: cliSock };
@@ -451,7 +467,7 @@ impl RDMASvcClient {
                 cliShareAddr,
                 srvShareAddr
             );
-            
+
             return rdmaSvcCli;
         }
         #[cfg(not(offload = "yes"))]{
