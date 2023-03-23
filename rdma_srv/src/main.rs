@@ -94,6 +94,7 @@ use crate::rdma_srv::RDMA_SRV;
 
 use self::qlib::ShareSpaceRef;
 use alloc::slice;
+use byteorder::WriteBytesExt;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -133,6 +134,8 @@ use std::{env, mem, ptr, thread, time};
 use std::net::UdpSocket;
 use std::str;
 
+use std::os::unix::net::UnixStream;
+use unix_socket_def::*;
 
 pub static GLOBAL_ALLOCATOR: HostAllocator = HostAllocator::New();
 
@@ -423,8 +426,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // println!("timestamp is {}", cur_timestamp);
 
     // let mut eventdata: u64 = 0;
-
-    let srvEventFd = RDMA_SRV.eventfd;
+    let srvEventFd;
+    #[cfg(offload = "yes")]{
+        srvEventFd =  gen_eventfd();
+    }
+    #[cfg(not(offload = "yes"))]{
+        srvEventFd = RDMA_SRV.eventfd;
+    }
     println!("srvEventFd: {}", srvEventFd);
     epoll_add(epoll_fd, srvEventFd, read_event(srvEventFd as u64))?;
     unblock_fd(srvEventFd);
@@ -1060,4 +1068,15 @@ fn SetupConnection(ip: &u32) {
 
         println!("ret is {}, error: {}", ret, Error::last_os_error());
     }
+}
+
+
+fn gen_eventfd() -> RawFd {
+
+    let efd = unsafe { libc::eventfd(0, 0) };
+
+    let client_sendfd_sock_fd = UnixSocket::NewClient("/EVENTFDSOCKET").unwrap();
+    let client_sendfd_sock = UnixSocket { fd: client_sendfd_sock_fd };
+    let res = client_sendfd_sock.SendFd(efd.as_raw_fd());
+    efd
 }
