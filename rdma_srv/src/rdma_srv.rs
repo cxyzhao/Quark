@@ -485,7 +485,13 @@ impl RDMASrv {
         let mut count = 0;
         for l1idx in 0..8 {
             // println!("l1idx: {}", l1idx);
-            let mut l1 = self.shareRegion.bitmap.l1bitmap[l1idx].swap(0, Ordering::SeqCst);
+            let mut l1;
+            #[cfg(offload = "yes")]{
+                l1 = self.shareRegion.bitmap.l1bitmap[l1idx].load(Ordering::SeqCst);
+            }
+            #[cfg(not(offload = "yes"))]{
+                l1 = self.shareRegion.bitmap.l1bitmap[l1idx].swap(0, Ordering::SeqCst);
+            }
             // println!("l1: {:x}", l1);
             for l1pos in 0..64 {
                 if l1 == 0 {
@@ -498,8 +504,13 @@ impl RDMASrv {
                     if l2idx > 502 {
                         break;
                     }
-                    let mut l2 =
-                        self.shareRegion.bitmap.l2bitmap[l2idx as usize].swap(0, Ordering::SeqCst);
+                    let mut l2;
+                    #[cfg(offload = "yes")]{
+                        l2 = self.shareRegion.bitmap.l2bitmap[l2idx as usize].load(Ordering::SeqCst);
+                    }
+                    #[cfg(not(offload = "yes"))]{
+                        l2 = self.shareRegion.bitmap.l2bitmap[l2idx as usize].swap(0, Ordering::SeqCst);
+                    }
                     // println!("l2: {:x}", l2);
                     for l2pos in 0..64 {
                         if l2 == 0 {

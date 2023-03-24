@@ -707,7 +707,7 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                 // println!("Got RDMA completion event 4");
             }
             Srv_FdType::SrvEventFd(srvEventFd) => {
-                // println!("Got SrvEventFd event {}", srvEventFd);
+                println!("Got SrvEventFd event {}", srvEventFd);
                 // print!("u64: {}, events: {:x}", ev.U64, ev.Events);
                 // println!("srvEvent notified ****************1");
                 // RDMAProcess();
@@ -906,6 +906,15 @@ fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, 
     unblock_fd(cliEventFd);
 
     let rdmaAgentId = RDMA_SRV.agentIdMgr.lock().AllocId().unwrap();
+
+    //For offloading case, we set bit of agent as 1 forever;
+    let l2idx =  rdmaAgentId as usize / 64;
+    let l2pos =  rdmaAgentId as usize % 64;
+    let l1idx = l2idx / 64;
+    let l1pos = l2idx % 64;
+    RDMA_SRV.shareRegion.bitmap.l2bitmap[l2idx].fetch_or(1 << l2pos, Ordering::SeqCst);
+    RDMA_SRV.shareRegion.bitmap.l1bitmap[l1idx].fetch_or(1 << l1pos, Ordering::SeqCst);
+   
     let rdmaAgent = RDMAAgent::New(
         rdmaAgentId,
         String::new(),
