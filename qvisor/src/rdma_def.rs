@@ -400,6 +400,15 @@ impl RDMASvcClient {
                 )
             };
 
+            //For offloading, the region needs to be initialized by both the host and the client. 
+            //In the case of non-offloading, only the server is responsible for initialization.
+            let mut cliAddr = cliShareAddr as *mut ClientShareRegion;
+            unsafe {
+                let cliAddr_ref = &*cliAddr;
+                cliAddr_ref.sq.Init();
+                cliAddr_ref.cq.Init();
+            }
+            
 
             /* srv memory region memfd
                 While offloading RDMASrv to BF2,
