@@ -248,7 +248,7 @@ impl RDMASrv {
 
         //start from 2M registration.
         let controlMR = RDMA
-            .CreateMemoryRegion(contrlAddr as u64, 2 * 1024 * 1024)
+            .CreateMemoryRegion(contrlAddr as u64, 8 * 1024 * 1024)
             .unwrap();
         let udpMR = RDMA
             .CreateMemoryRegion(udpBufferAddr as u64, udpBufferSize)
