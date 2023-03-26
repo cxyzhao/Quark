@@ -196,6 +196,7 @@ impl Default for RDMARespMsg {
     }
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAConnectResp {
     pub sockfd: u32,
@@ -207,6 +208,7 @@ pub struct RDMAConnectResp {
     pub srcPort: u16,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAAcceptResp {
     pub sockfd: u32,
@@ -218,6 +220,7 @@ pub struct RDMAAcceptResp {
     pub srcPort: u16,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMANotifyResp {
     // pub sockfd: u32,
@@ -241,6 +244,7 @@ pub const FIN_SENT_TO_PEER: EventMask = 0x02;
 // pub const EVENT_ERR: EventMask = 0x08; // POLLERR
 // pub const EVENT_HUP: EventMask = 0x10; // POLLHUP
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAFinNotifyResp {
     // pub sockfd: u32,
@@ -248,6 +252,7 @@ pub struct RDMAFinNotifyResp {
     pub event: EventMask,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAListenReq {
     //pub vpcId: u32,
@@ -257,6 +262,7 @@ pub struct RDMAListenReq {
     pub waitingLen: i32,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RDMAListenReqUsingPodId {
     pub sockfd: u32,
@@ -265,18 +271,21 @@ pub struct RDMAListenReqUsingPodId {
     pub waitingLen: i32,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RDMASendUDPPacket {
     pub podId: [u8; 64],
     pub udpBuffIdx: u32,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAWriteReq {
     // pub sockfd: u32,
     pub channelId: u32,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAShutdownReq {
     // pub sockfd: u32,
@@ -300,6 +309,7 @@ pub struct RDMAReadReq {
     pub channelId: u32,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAConnectReq {
     // pub vpcId: u32,
@@ -310,6 +320,7 @@ pub struct RDMAConnectReq {
     pub srcPort: u16,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RDMAConnectReqUsingPodId {
     //pub vpcId: u32,
@@ -320,12 +331,14 @@ pub struct RDMAConnectReqUsingPodId {
     pub srcPort: u16,
 }
 
+#[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAAcceptReq {
     //pub vpcId: u32,
     pub sockfd: u32,
 }
 
+#[repr(C)]
 #[derive(Clone, Debug)]
 pub struct RDMAListenResp {
     pub ipAddr: u32,
