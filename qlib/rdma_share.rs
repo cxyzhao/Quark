@@ -196,7 +196,6 @@ impl Default for RDMARespMsg {
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAConnectResp {
@@ -209,19 +208,6 @@ pub struct RDMAConnectResp {
     pub srcPort: u16,
 }
 
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMAConnectResp {
-    pub sockfd: u32,
-    pub ioBufIndex: u32,
-    pub channelId: u32,
-    pub dstIpAddr: u32,
-    pub dstPort: u16,
-    pub srcIpAddr: u32,
-    pub srcPort: u16,
-}
-
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAAcceptResp {
@@ -234,28 +220,7 @@ pub struct RDMAAcceptResp {
     pub srcPort: u16,
 }
 
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMAAcceptResp {
-    pub sockfd: u32,
-    pub ioBufIndex: u32,
-    pub channelId: u32,
-    pub dstIpAddr: u32,
-    pub dstPort: u16,
-    pub srcIpAddr: u32,
-    pub srcPort: u16,
-}
-
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMANotifyResp {
-    // pub sockfd: u32,
-    pub channelId: u32,
-    pub event: EventMask,
-}
-
-#[cfg(not(target_arch = "aarch64"))]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMANotifyResp {
     // pub sockfd: u32,
@@ -279,7 +244,6 @@ pub const FIN_SENT_TO_PEER: EventMask = 0x02;
 // pub const EVENT_ERR: EventMask = 0x08; // POLLERR
 // pub const EVENT_HUP: EventMask = 0x10; // POLLHUP
 
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAFinNotifyResp {
@@ -288,15 +252,6 @@ pub struct RDMAFinNotifyResp {
     pub event: EventMask,
 }
 
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMAFinNotifyResp {
-    // pub sockfd: u32,
-    pub channelId: u32,
-    pub event: EventMask,
-}
-
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAListenReq {
@@ -307,17 +262,6 @@ pub struct RDMAListenReq {
     pub waitingLen: i32,
 }
 
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMAListenReq {
-    //pub vpcId: u32,
-    pub sockfd: u32,
-    pub ipAddr: u32,
-    pub port: u16,
-    pub waitingLen: i32,
-}
-
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RDMAListenReqUsingPodId {
@@ -327,30 +271,12 @@ pub struct RDMAListenReqUsingPodId {
     pub waitingLen: i32,
 }
 
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Clone, Copy, Debug)]
-pub struct RDMAListenReqUsingPodId {
-    pub sockfd: u32,
-    pub podId: [u8; 64],
-    pub port: u16,
-    pub waitingLen: i32,
-}
-
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RDMASendUDPPacket {
     pub podId: [u8; 64],
     pub udpBuffIdx: u32,
 }
-
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Clone, Copy, Debug)]
-pub struct RDMASendUDPPacket {
-    pub podId: [u8; 64],
-    pub udpBuffIdx: u32,
-}
-
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAWriteReq {
@@ -358,16 +284,7 @@ pub struct RDMAWriteReq {
     pub channelId: u32,
 }
 
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMAShutdownReq {
-    // pub sockfd: u32,
-    pub channelId: u32,
-    pub howto: u8,
-}
-
-#[cfg(not(target_arch = "aarch64"))]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAShutdownReq {
     // pub sockfd: u32,
@@ -391,7 +308,6 @@ pub struct RDMAReadReq {
     pub channelId: u32,
 }
 
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAConnectReq {
@@ -403,18 +319,6 @@ pub struct RDMAConnectReq {
     pub srcPort: u16,
 }
 
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Default, Clone, Copy, Debug)]
-pub struct RDMAConnectReq {
-    // pub vpcId: u32,
-    pub sockfd: u32,
-    pub dstIpAddr: u32,
-    pub dstPort: u16,
-    pub srcIpAddr: u32,
-    pub srcPort: u16,
-}
-
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RDMAConnectReqUsingPodId {
@@ -425,18 +329,6 @@ pub struct RDMAConnectReqUsingPodId {
     pub podId: [u8; 64],
     pub srcPort: u16,
 }
-
-#[cfg(not(target_arch = "aarch64"))]
-#[derive(Clone, Copy, Debug)]
-pub struct RDMAConnectReqUsingPodId {
-    //pub vpcId: u32,
-    pub sockfd: u32,
-    pub dstIpAddr: u32,
-    pub dstPort: u16,
-    pub podId: [u8; 64],
-    pub srcPort: u16,
-}
-
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct RDMAAcceptReq {
@@ -444,16 +336,7 @@ pub struct RDMAAcceptReq {
     pub sockfd: u32,
 }
 
-#[cfg(target_arch = "aarch64")]
 #[repr(C)]
-#[derive(Clone, Debug)]
-pub struct RDMAListenResp {
-    pub ipAddr: u32,
-    pub port: u16,
-    pub waitingLen: i32,
-}
-
-#[cfg(not(target_arch = "aarch64"))]
 #[derive(Clone, Debug)]
 pub struct RDMAListenResp {
     pub ipAddr: u32,
