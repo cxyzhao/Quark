@@ -1286,7 +1286,7 @@ impl QueuePair {
         };
 
         attr.qp_state = rdmaffi::ibv_qp_state::IBV_QPS_RTR;
-        attr.path_mtu = rdmaffi::ibv_mtu::IBV_MTU_4096;
+        attr.path_mtu = rdmaffi::ibv_mtu::IBV_MTU_1024;
         attr.dest_qp_num = remote_qpn;
         attr.rq_psn = 0;
         attr.max_dest_rd_atomic = 1;
@@ -1391,7 +1391,7 @@ impl QueuePair {
         };
 
         attr.qp_state = rdmaffi::ibv_qp_state::IBV_QPS_RTR;
-        attr.path_mtu = rdmaffi::ibv_mtu::IBV_MTU_4096;
+        attr.path_mtu = rdmaffi::ibv_mtu::IBV_MTU_1024;
         attr.dest_qp_num = 0;
         attr.rq_psn = 0;
         attr.max_dest_rd_atomic = 1;
