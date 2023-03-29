@@ -265,7 +265,7 @@ impl RingBuf {
     pub fn AvailableDataSize(&self) -> usize {
         let head = self.headtail[0].load(Ordering::Acquire);
         let tail = self.headtail[1].load(Ordering::Acquire);
-        return tail.wrapping_sub(head) as usize;
+        return (tail.wrapping_sub(head) & self.ringMask) as usize;
     }
 
     pub fn AvailableSpace(&self) -> usize {
@@ -278,8 +278,8 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Relaxed);
         let tail = self.headtail[1].load(Ordering::Acquire);
 
-        let mut available = tail.wrapping_sub(head) as usize;
-        let full = available == self.Len();
+        let mut available = (tail.wrapping_sub(head) & self.ringMask) as usize;
+        let full = available == (self.Len()-1);
 
         if available > buf.len() {
             available = buf.len();
@@ -302,7 +302,7 @@ impl RingBuf {
             buf[firstLen..firstLen + secondLen].copy_from_slice(&self.Buf()[0..secondLen])
         }
 
-        self.headtail[0].store(head.wrapping_add(available as u32), Ordering::Release);
+        self.headtail[0].store(head.wrapping_add(available as u32) & self.ringMask, Ordering::Release);
         return Ok((full, available));
     }
 
@@ -318,7 +318,7 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Relaxed);
         let tail = self.headtail[1].load(Ordering::Acquire);
 
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
 
         if available == 0 {
             return None;
@@ -338,7 +338,7 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::SeqCst);
         let tail = self.headtail[1].load(Ordering::SeqCst);
 
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
 
         if available == 0 {
             return (0, 0);
@@ -359,7 +359,7 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Relaxed);
         let tail = self.headtail[1].load(Ordering::Acquire);
 
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
 
         if available == 0 {
             data.cnt = 0;
@@ -399,11 +399,11 @@ impl RingBuf {
     pub fn Consume(&self, count: usize) -> bool { //2
         //TODO: Revisit memory order to loose constraints
         let head = self.headtail[0].load(Ordering::SeqCst);
-        self.headtail[0].store(head.wrapping_add(count as u32), Ordering::SeqCst);
+        self.headtail[0].store(head.wrapping_add(count as u32) & self.ringMask, Ordering::SeqCst);
 
         let tail = self.headtail[1].load(Ordering::SeqCst);
-        let available = tail.wrapping_sub(head) as usize;
-        let trigger = available == self.Len();
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
+        let trigger = available == (self.Len() - 1);
         return trigger
     }
     /****************************************** write *********************************************************/
@@ -412,13 +412,13 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Acquire);
         let tail = self.headtail[1].load(Ordering::Relaxed);
 
-        let available = tail.wrapping_sub(head) as usize;
-        if available == self.Len() {
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
+        if available == self.Len() - 1 {
             return None;
         }
 
         let writePos = (tail & self.ringMask) as usize;
-        let writeSize = self.Len() - available;
+        let writeSize = self.Len() - available - 1;
 
         let toEnd = self.Len() - writePos;
         if toEnd < writeSize {
@@ -433,9 +433,9 @@ impl RingBuf {
 
         let head = self.headtail[0].load(Ordering::Acquire);
         let tail = self.headtail[1].load(Ordering::Relaxed);
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head)  & self.ringMask) as usize;
 
-        if available == self.Len() {
+        if available == self.Len() - 1 {
             data.cnt = 0;
             return;
         }
@@ -443,7 +443,7 @@ impl RingBuf {
         //error!("GetSpaceIovs available is {}", self.available);
         assert!(iovs.len() >= 2);
         let writePos = (tail & self.ringMask) as usize;
-        let writeSize = self.Len() - available;
+        let writeSize = self.Len() - available - 1;
 
         let toEnd = self.Len() - writePos;
 
@@ -468,13 +468,13 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Acquire);
         let tail = self.headtail[1].load(Ordering::Relaxed);
 
-        let available = tail.wrapping_sub(head) as usize;
-        if available == self.Len() {
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
+        if available == self.Len() - 1 {
             return (0, 0);
         }
 
         let writePos = (tail & self.ringMask) as usize;
-        let writeSize = self.Len() - available;
+        let writeSize = self.Len() - available - 1;
 
         let toEnd = self.Len() - writePos;
         if toEnd < writeSize {
@@ -497,10 +497,10 @@ impl RingBuf {
     pub fn Produce(&self, count: usize) -> bool {
         //TODO: Revisit memory order to loose constraints
         let tail = self.headtail[1].load(Ordering::SeqCst);
-        self.headtail[1].store(tail.wrapping_add(count as u32), Ordering::SeqCst);
+        self.headtail[1].store(tail.wrapping_add(count as u32) & self.ringMask, Ordering::SeqCst);
 
         let head = self.headtail[0].load(Ordering::SeqCst);
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
         let trigger = available == 0;
         return trigger
     }
@@ -510,12 +510,12 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Acquire);
         let tail = self.headtail[1].load(Ordering::Relaxed);
 
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
 
         let empty = available == 0;
 
         let writePos = (tail & self.ringMask) as usize;
-        let mut writeSize = self.Len() - available;
+        let mut writeSize = self.Len() - available - 1;
 
         if writeSize > buf.len() {
             writeSize = buf.len();
@@ -537,7 +537,7 @@ impl RingBuf {
             self.Buf()[0..secondLen].copy_from_slice(&buf[firstLen..firstLen + secondLen]);
         }
 
-        self.headtail[1].store(tail.wrapping_add(writeSize as u32), Ordering::Release);
+        self.headtail[1].store(tail.wrapping_add(writeSize as u32) & self.ringMask, Ordering::Release);
         return Ok((empty, writeSize));
     }
 
@@ -545,8 +545,8 @@ impl RingBuf {
         let head = self.headtail[0].load(Ordering::Acquire);
         let tail = self.headtail[1].load(Ordering::Relaxed);
 
-        let available = tail.wrapping_sub(head) as usize;
-        let space = self.Len() - available;
+        let available = (tail.wrapping_sub(head) & self.ringMask) as usize;
+        let space = self.Len() - available - 1;
 
         if available < buf.len() {
             let str = alloc::str::from_utf8(buf).unwrap();

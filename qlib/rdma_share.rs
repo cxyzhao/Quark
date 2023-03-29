@@ -57,7 +57,7 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
     pub fn Pop(&self) -> Option<T> {
         let head = self.head.load(Ordering::Relaxed);
         let tail = self.tail.load(Ordering::Acquire);
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.RingMask()) as usize;
         if available == 0 {
             return None;
         }
@@ -65,14 +65,14 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
         // error!("RingQueue::Pop, available: {}", available);
         let idx = head & self.RingMask();
         let data = self.data[idx as usize];
-        self.head.store(head.wrapping_add(1), Ordering::Release);
+        self.head.store(head.wrapping_add(1) & self.RingMask(), Ordering::Release);
         return Some(data);
     }
 
     pub fn DataCount(&self) -> usize {
         let head = self.head.load(Ordering::Relaxed);
         let tail = self.tail.load(Ordering::Acquire);
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.RingMask()) as usize;
         return available;
     }
 
@@ -80,7 +80,7 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
     pub fn SpaceCount(&self) -> usize {
         let head = self.head.load(Ordering::Relaxed);
         let tail = self.tail.load(Ordering::Acquire);
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.RingMask()) as usize;
         return self.Count() - available;
     }
 
@@ -88,16 +88,16 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
     pub fn Push(&mut self, data: T) -> bool {
         let head = self.head.load(Ordering::Acquire);
         let tail = self.tail.load(Ordering::Relaxed);
-        let available = tail.wrapping_sub(head) as usize;
+        let available = (tail.wrapping_sub(head) & self.RingMask()) as usize;
 
-        if available == self.Count() {
+        if available == self.Count() - 1 {
             return false;
         }
 
         // error!("RingQueue::Push, available: {}, count: {}", available, self.Count());
         let idx = tail & self.RingMask();
         self.data[idx as usize] = data;
-        self.tail.store(tail.wrapping_add(1), Ordering::Release);
+        self.tail.store(tail.wrapping_add(1) & self.RingMask(), Ordering::Release);
         return true;
     }
 }
