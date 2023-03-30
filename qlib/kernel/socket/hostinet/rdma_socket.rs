@@ -64,6 +64,11 @@ impl RDMA {
                 match sockInfo {
                     SockInfo::RDMADataSocket(rdmaDataScoket) => {
                         let _ret = GlobalRDMASvcCli().read(rdmaDataScoket.channelId);
+                        
+                        #[cfg(offload = "yes")]{
+                            //TODO(sync with DPU)
+                            buf.GetAndClearConsumeReadData();
+                        }
                     }
                     _ => {
                         panic!("RDMA::Read, incorrect sockInfo: {:?}", sockInfo);
