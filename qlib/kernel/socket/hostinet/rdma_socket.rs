@@ -106,23 +106,45 @@ impl RDMA {
         //         }
         //     }
         // }
-        if writeBuf.is_some() {
-            if RDMA_ENABLE {
-                // HostSpace::RDMANotify(fd, RDMANotifyType::RDMAWrite);
-                let sockInfo = GlobalIOMgr().GetByHost(fd).unwrap().lock().sockInfo.lock().clone();
-
-                match sockInfo {
-                    SockInfo::RDMADataSocket(rdmaDataScoket) => {
-                        let _ret = GlobalRDMASvcCli().write(rdmaDataScoket.channelId);
+        #[cfg(not(offload = "yes"))]{
+            if writeBuf.is_some() { //edge trigger
+                if RDMA_ENABLE {
+                    // HostSpace::RDMANotify(fd, RDMANotifyType::RDMAWrite);
+                    let sockInfo = GlobalIOMgr().GetByHost(fd).unwrap().lock().sockInfo.lock().clone();
+    
+                    match sockInfo {
+                        SockInfo::RDMADataSocket(rdmaDataScoket) => {
+                            let _ret = GlobalRDMASvcCli().write(rdmaDataScoket.channelId);
+                        }
+                        _ => {
+                            panic!("RDMA::Write, incorrect sockInfo: {:?}", sockInfo);
+                        }
                     }
-                    _ => {
-                        panic!("RDMA::Write, incorrect sockInfo: {:?}", sockInfo);
-                    }
+                } else {
+                    HostSpace::RDMANotify(fd, RDMANotifyType::Write);
                 }
-            } else {
-                HostSpace::RDMANotify(fd, RDMANotifyType::Write);
             }
         }
+        #[cfg(offload = "yes")]{
+            if count > 0{ //level always trigger
+                if RDMA_ENABLE {
+                    // HostSpace::RDMANotify(fd, RDMANotifyType::RDMAWrite);
+                    let sockInfo = GlobalIOMgr().GetByHost(fd).unwrap().lock().sockInfo.lock().clone();
+    
+                    match sockInfo {
+                        SockInfo::RDMADataSocket(rdmaDataScoket) => {
+                            let _ret = GlobalRDMASvcCli().write(rdmaDataScoket.channelId);
+                        }
+                        _ => {
+                            panic!("RDMA::Write, incorrect sockInfo: {:?}", sockInfo);
+                        }
+                    }
+                } else {
+                    HostSpace::RDMANotify(fd, RDMANotifyType::Write);
+                }
+            }
+        }
+
 
         return Ok(count as i64);
     }
