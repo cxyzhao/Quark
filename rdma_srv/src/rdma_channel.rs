@@ -166,7 +166,7 @@ impl RDMAChannelIntern {
         let writeCount = self.writeCount.load(QOrdering::ACQUIRE);
         // debug!("ProcessRDMAWriteImmFinish::1 writeCount: {}", writeCount);
 
-        let (trigger, addr, availableDataLen) = self
+        let (mut trigger, addr, availableDataLen) = self
             .sockBuf
             .ConsumeAndGetAvailableWriteBuf(writeCount as usize);
 
@@ -202,6 +202,9 @@ impl RDMAChannelIntern {
         //         "ProcessRDMAWriteImmFinish::3, sockfd: {}, channelId: {}, len: {}, writeCount: {}, trigger: {}",
         //         self.sockfd, self.localId, _len, writeCount, trigger
         //     );
+        #[cfg(offload = "yes")]{
+            trigger = true;
+        }
         if trigger {
             if self.localId != 0 {
                 // println!("ProcessRDMAWriteImmFinish: before SendResponse");
