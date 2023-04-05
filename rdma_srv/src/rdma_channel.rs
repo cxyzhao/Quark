@@ -340,7 +340,7 @@ impl RDMAChannelIntern {
 
         if recvCount > 0 {
             // debug!("ProcessRDMARecvWriteImm::1, channelId: {}, recvCount: {}", self.localId, recvCount);
-            let (trigger, _addr, _len) = self.sockBuf.ProduceAndGetFreeReadBuf(recvCount as usize);
+            let (mut trigger, _addr, _len) = self.sockBuf.ProduceAndGetFreeReadBuf(recvCount as usize);
             // debug!("ProcessRDMARecvWriteImm::2, trigger {}", trigger);
             // println!(
             //     "ProcessRDMARecvWriteImm::3, channelId: {}, len: {}, recvCount: {}, trigger: {}",
@@ -350,6 +350,9 @@ impl RDMAChannelIntern {
             //     recvCount,
             //     trigger
             // );
+            #[cfg(offload = "yes")]{
+                trigger = true;
+            }
             if trigger {
                 // TODO: notify 'client' via CQ
                 // println!("ProcessRDMARecvWriteImm: send EVENT_IN, recvCount: {}", recvCount);
