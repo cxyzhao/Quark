@@ -55,8 +55,11 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
 
     // pop
     pub fn Pop(&self) -> Option<T> {
-        let head = self.head.load(Ordering::Relaxed);
-        let tail = self.tail.load(Ordering::Acquire);
+        // let head = self.head.load(Ordering::Relaxed);
+        // let tail = self.tail.load(Ordering::Acquire);
+        //TODO: Revisit memory order to loose constraints
+        let head = self.head.load(Ordering::SeqCst);
+        let tail = self.tail.load(Ordering::SeqCst);
         let available = tail.wrapping_sub(head) as usize;
         if available == 0 {
             return None;
@@ -65,29 +68,39 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
         // error!("RingQueue::Pop, available: {}", available);
         let idx = head & self.RingMask();
         let data = self.data[idx as usize];
-        self.head.store(head.wrapping_add(1), Ordering::Release);
+        // self.head.store(head.wrapping_add(1), Ordering::Release);
+        self.head.store(head.wrapping_add(1), Ordering::SeqCst);
         return Some(data);
     }
 
     pub fn DataCount(&self) -> usize {
-        let head = self.head.load(Ordering::Relaxed);
-        let tail = self.tail.load(Ordering::Acquire);
+        // let head = self.head.load(Ordering::Relaxed);
+        // let tail = self.tail.load(Ordering::Acquire);
+        //TODO: Revisit memory order to loose constraints
+        let head = self.head.load(Ordering::SeqCst);
+        let tail = self.tail.load(Ordering::SeqCst);
         let available = tail.wrapping_sub(head) as usize;
         return available;
     }
 
     //push
     pub fn SpaceCount(&self) -> usize {
-        let head = self.head.load(Ordering::Relaxed);
-        let tail = self.tail.load(Ordering::Acquire);
+        // let head = self.head.load(Ordering::Relaxed);
+        // let tail = self.tail.load(Ordering::Acquire);
+        //TODO: Revisit memory order to loose constraints
+        let head = self.head.load(Ordering::SeqCst);
+        let tail = self.tail.load(Ordering::SeqCst);
         let available = tail.wrapping_sub(head) as usize;
         return self.Count() - available;
     }
 
     // precondition: there must be at least one free space
     pub fn Push(&mut self, data: T) -> bool {
-        let head = self.head.load(Ordering::Acquire);
-        let tail = self.tail.load(Ordering::Relaxed);
+        // let head = self.head.load(Ordering::Acquire);
+        // let tail = self.tail.load(Ordering::Relaxed);
+        //TODO: Revisit memory order to loose constraints
+        let head = self.head.load(Ordering::SeqCst);
+        let tail = self.tail.load(Ordering::SeqCst);
         let available = tail.wrapping_sub(head) as usize;
 
         if available == self.Count() {
@@ -97,7 +110,8 @@ impl<T: 'static + Default + Copy> RingQueue<T> {
         // error!("RingQueue::Push, available: {}, count: {}", available, self.Count());
         let idx = tail & self.RingMask();
         self.data[idx as usize] = data;
-        self.tail.store(tail.wrapping_add(1), Ordering::Release);
+        // self.tail.store(tail.wrapping_add(1), Ordering::Release);
+        self.tail.store(tail.wrapping_add(1), Ordering::SeqCst);
         return true;
     }
 }
