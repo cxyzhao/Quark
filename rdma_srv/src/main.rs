@@ -191,7 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         RDMA.Init("mlx5_2", 1);
     }
     #[cfg(not(offload = "yes"))]{
-        RDMA.Init("rocep152s0f0", 1);
+        RDMA.Init("mlx5_0", 1);
     }
     let hostname_os = hostname::get()?;
     match hostname_os.into_string() {
@@ -347,8 +347,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
                 }
                 #[cfg(not(offload = "yes"))]{
-                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
-                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.5").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.7").unwrap()).to_be();
                 }
                 
                 RDMA_CTLINFO.localIp_set(localIpAddr);
@@ -369,7 +369,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
                 }
                 #[cfg(not(offload = "yes"))]{
-                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.5").unwrap()).to_be();
                 }
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&localIpAddr);
@@ -449,7 +449,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             udp_s_addr = u32::from_be_bytes([192, 168, 2, 23]).to_be();
         }
         #[cfg(not(offload = "yes"))]{
-            udp_s_addr = u32::from_be_bytes([192, 168, 2, 3]).to_be();
+            udp_s_addr = u32::from_be_bytes([192, 168, 2, 5]).to_be();
         }
         let srv_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
@@ -707,7 +707,7 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                 // println!("Got RDMA completion event 4");
             }
             Srv_FdType::SrvEventFd(srvEventFd) => {
-                println!("Got SrvEventFd event {}", srvEventFd);
+                // println!("Got SrvEventFd event {}", srvEventFd);
                 // print!("u64: {}, events: {:x}", ev.U64, ev.Events);
                 // println!("srvEvent notified ****************1");
                 // RDMAProcess();
