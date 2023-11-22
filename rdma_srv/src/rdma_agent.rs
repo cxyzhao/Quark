@@ -128,11 +128,11 @@ impl RDMAAgent {
         clientEventfd: i32,
         podId: [u8; 64],
     ) -> Self {
-        // let memfdname = CString::new("RDMASrvMemFd").expect("CString::new failed for RDMASrvMemFd");
-        // let memfd = unsafe { libc::memfd_create(memfdname.as_ptr(), libc::MFD_ALLOW_SEALING) };
+        let memfdname = CString::new("RDMASrvMemFd").expect("CString::new failed for RDMASrvMemFd");
+        let memfd = unsafe { libc::memfd_create(memfdname.as_ptr(), libc::MFD_ALLOW_SEALING) };
 
-        const memfdname   : *const c_char = b"/SharedMemRegionWithBroker\0".as_ptr() as *const c_char;
-        let memfd = unsafe { shm_open(memfdname, O_RDWR, libc::S_IRUSR | libc::S_IWUSR) };
+        // const memfdname   : *const c_char = b"/SharedMemRegionWithBroker\0".as_ptr() as *const c_char;
+        // let memfd = unsafe { shm_open(memfdname, O_RDWR, libc::S_IRUSR | libc::S_IWUSR) };
 
         let size = mem::size_of::<ClientShareRegion>();
         let _ret = unsafe { libc::ftruncate(memfd, size as i64) };
@@ -566,7 +566,7 @@ impl RDMAAgent {
                                 if dstIpAddr == 0 {
                                     self.SendControlMsgInternal(
                                         msg.sockfd,
-                                        u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be(),
+                                        u32::from(Ipv4Addr::from_str("192.168.2.5").unwrap()).to_be(),
                                         srcVpcIpAddr,
                                         msg.srcPort,
                                         dstIpAddr,

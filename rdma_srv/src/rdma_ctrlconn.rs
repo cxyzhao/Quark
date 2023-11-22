@@ -103,7 +103,7 @@ impl Default for CtrlInfo {
                 lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
             }
             #[cfg(not(offload = "yes"))]{
-                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
+                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.5").unwrap()).to_be();
             }
             let node1 = Node {
                 hostname: String::from("lab 1"),
@@ -119,7 +119,7 @@ impl Default for CtrlInfo {
                 lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
             }
             #[cfg(not(offload = "yes"))]{
-                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.7").unwrap()).to_be();
             }
             let node2 = Node {
                 hostname: String::from("lab 2"),
