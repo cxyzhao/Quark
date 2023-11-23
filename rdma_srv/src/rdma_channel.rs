@@ -458,6 +458,8 @@ impl RDMAChannelIntern {
         let buf = self.sockBuf.writeBuf.lock();
         // println!("RDMASendLocked 3");
         let (addr, totalLen) = buf.GetDataBuf();
+        // println!("by_cz_off Head {} Tail {}", buf.buf.headtail[0].load(Ordering::Relaxed),  buf.buf.headtail[1].load(Ordering::Acquire));
+        // println!("by_cz_off id {} RDMASendLocked 1 totalLen {}  freespace {}", self.localId, totalLen, remoteInfo.freespace);
         // debug!("RDMASendLocked::1, readCount: {}, addr: {:x}, len: {}, remote.freespace: {}", readCount, addr, len, remoteInfo.freespace);
         // println!(
         //     "RDMASendLocked 4,len: {}, remoteInfo.freespace: {}",

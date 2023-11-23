@@ -311,7 +311,7 @@ impl RDMASvcClient {
                                     panic!("RDMARespMsg::RDMAConnect, Can't find sockfd based on rdmaId: {}", response.sockfd);
                                 }
                             };
-
+                            
                             let sockInfo = GlobalIOMgr()
                                 .GetByHost(sockfd)
                                 .unwrap()

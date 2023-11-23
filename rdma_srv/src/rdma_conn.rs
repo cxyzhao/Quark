@@ -704,7 +704,7 @@ impl RDMAControlChannel {
             let consumedData = rdmaChannel.sockBuf.AddConsumeReadData(len as u64);
             // println!("RDMAControlChannel::ProcessRDMARecvWriteImm 3");
 
-            if 2 * consumedData > readBuf.BufSize() as u64 {
+            if 2 * consumedData >= readBuf.BufSize() as u64 {
                 // println!("Control Channel to send consumed data");
                 rdmaChannel.SendConsumedData();
             }
@@ -825,7 +825,7 @@ impl RDMAControlChannel {
                     connectResponse.rlen,
                     connectResponse.rkey,
                 );
-                // println!("HandleConnectResponse: before SendResponse");
+                // println!("by_cz HandleConnectResponse: before SendResponse");
                 rdmaChannel.agent.SendResponse(RDMAResp {
                     user_data: 0,
                     msg: RDMARespMsg::RDMAConnect(RDMAConnectResp {

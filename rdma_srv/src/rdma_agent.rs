@@ -442,9 +442,10 @@ impl RDMAAgent {
                         status: SrvEndPointStatus::Listening,
                     },
                 );
-                // error!("RDMAReqMsg::RDMAListenUsingPodId, podId: {:?}, port: {}", podId, msg.port);
+                error!("RDMAReqMsg::RDMAListenUsingPodId, podId: {:?}, port: {}", podId, msg.port);
             }
             RDMAReqMsg::RDMAConnect(msg) => {
+                error!("RDMAReqMsg::RDMAConnect 448");
                 let mut msgCloned = msg.clone();
 
                 match RDMA_CTLINFO.IsService(msgCloned.dstIpAddr, &msgCloned.dstPort) {
@@ -455,8 +456,10 @@ impl RDMAAgent {
                         msgCloned.dstPort = ipWithPort.port.port;
                     }
                 }
+                error!("RDMAReqMsg::RDMAConnect 459");
                 match RDMA_CTLINFO.get_node_ip_by_pod_ip(&msgCloned.dstIpAddr) {
                     Some(nodeIpAddr) => {
+                        error!("RDMAReqMsg::RDMAConnect 462");
                         let conns = RDMA_SRV.conns.lock();
                         let rdmaConn = conns.get(&nodeIpAddr).unwrap();
                         let rdmaChannel = self.CreateClientRDMAChannel(&msgCloned, rdmaConn.clone());
@@ -564,17 +567,20 @@ impl RDMAAgent {
                         None => {
                             if !RDMA_CTLINFO.isK8s {
                                 if dstIpAddr == 0 {
+                                    error!("571 dstIpAddr == 0");
                                     self.SendControlMsgInternal(
                                         msg.sockfd,
-                                        u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be(),
+                                        u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be(),
                                         srcVpcIpAddr,
                                         msg.srcPort,
                                         dstIpAddr,
                                         dstPort,
                                     );
                                 }
+                                error!("571 dstIpAddr != 0");
                             }
                             else {
+                                error!("TODO: return error as no ip to node mapping is found, dstIpAddr: {}, dstPort: {}", dstIpAddr, dstPort);
                                 println!("TODO: return error as no ip to node mapping is found, dstIpAddr: {}, dstPort: {}", dstIpAddr, dstPort);
                             }
                         }

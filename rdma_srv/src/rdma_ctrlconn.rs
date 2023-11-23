@@ -100,10 +100,10 @@ impl Default for CtrlInfo {
             //let lab1ip = u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be();
             let lab1ip;
             #[cfg(offload = "yes")]{
-                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
+                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
             }
             #[cfg(not(offload = "yes"))]{
-                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
+                lab1ip = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
             }
             let node1 = Node {
                 hostname: String::from("lab 1"),
@@ -116,10 +116,10 @@ impl Default for CtrlInfo {
             //let lab2ip = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
             let lab2ip;
             #[cfg(offload = "yes")]{
-                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
             }
             #[cfg(not(offload = "yes"))]{
-                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                lab2ip = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
             }
             let node2 = Node {
                 hostname: String::from("lab 2"),
@@ -181,8 +181,8 @@ impl Default for CtrlInfo {
             }),
             //134654144 -> 100733100
             podIpInfo: Mutex::new(HashMap::from_iter([(
-                u32::from(Ipv4Addr::from_str("192.168.6.8").unwrap()).to_le(),
-                (u32::from(Ipv4Addr::from_str("172.16.1.43").unwrap()).to_be()),
+                u32::from(Ipv4Addr::from_str("172.16.2.8").unwrap()).to_le(),
+                (u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be()),
             )])),
             fds: Mutex::new(HashMap::new()),
             hostname: Mutex::new(String::new()),

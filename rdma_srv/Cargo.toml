@@ -82,6 +82,7 @@ overflow-checks = false
 lto = true
 codegen-units = 1
 debug-assertions = false
+incremental = true
 
 [[bin]]
 name = "rdma_srv"
