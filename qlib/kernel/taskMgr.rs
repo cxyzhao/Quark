@@ -74,9 +74,14 @@ fn switch_to(to: TaskId) {
     }
 }
 
-pub const IO_WAIT_CYCLES: i64 = 20_000_000;
+// pub const IO_WAIT_CYCLES: i64 = 20_000;
 
-pub const WAIT_CYCLES: i64 = 1_000_000; // 1ms
+// pub const WAIT_CYCLES: i64 = 1_000;
+
+
+pub const IO_WAIT_CYCLES: i64 = 5_000;
+
+pub const WAIT_CYCLES: i64 = 500;
 
 pub fn IOWait() {
     let mut start = TSC.Rdtsc();

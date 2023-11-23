@@ -168,12 +168,14 @@ impl RDMASvcClient {
 
     pub fn read(&self, channelId: u32) -> Result<()> {
         // println!("rdmaSvcCli::read 1");
+        // error!("by_cz rdmaSvcCli::read 1");
         if self.cliShareRegion.lock().sq.Push(RDMAReq {
             user_data: 0,
             msg: RDMAReqMsg::RDMARead(RDMAReadReq {
                 channelId: channelId,
             }),
         }) {
+            // error!("by_cz rdmaSvcCli::read 2");
             // println!("rdmaSvcCli::read 2");
             self.updateBitmapAndWakeUpServerIfNecessary();
             Ok(())
