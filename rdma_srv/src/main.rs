@@ -182,7 +182,7 @@ const WRITE_FLAGS: i32 = libc::EPOLLET | libc::EPOLLOUT;
 
 const READ_WRITE_FLAGS: i32 = libc::EPOLLET | libc::EPOLLOUT | libc::EPOLLIN;
 
-pub const IO_WAIT_CYCLES: i64 = 100_000_000; // 1ms
+pub const IO_WAIT_CYCLES: i64 = 100_000; // 1ms
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -511,7 +511,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             epoll_fd,
             events.as_mut_ptr() as *mut libc::epoll_event,
             1024,
-            -1 as libc::c_int
+            0 as libc::c_int
         )) {
             Ok(v) => v,
             Err(e) => panic!("error during epoll wait: {}", e),
@@ -707,7 +707,7 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                 // println!("Got RDMA completion event 4");
             }
             Srv_FdType::SrvEventFd(srvEventFd) => {
-                println!("Got SrvEventFd event {}", srvEventFd);
+                // println!("Got SrvEventFd event {}", srvEventFd);
                 // print!("u64: {}, events: {:x}", ev.U64, ev.Events);
                 // println!("srvEvent notified ****************1");
                 // RDMAProcess();

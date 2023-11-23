@@ -169,9 +169,11 @@ impl ShareAllocator {
     pub fn AllocHeadTail(headTailAddr: u64, init: bool) -> &'static [AtomicU32] {
         let ptr = headTailAddr as *mut AtomicU32;
         let slice = unsafe { slice::from_raw_parts(ptr, 2 as usize) };
-        if init {
-            slice[0].store(0, Ordering::Release);
-            slice[1].store(0, Ordering::Release);
+        #[cfg(not(offload = "yes"))]{
+            if init {
+                slice[0].store(0, Ordering::Release);
+                slice[1].store(0, Ordering::Release);
+            }
         }
 
         return slice;
