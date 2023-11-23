@@ -343,12 +343,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let peerIpAddr;
                 let localIpAddr;
                 #[cfg(offload = "yes")]{
-                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
-                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
                 }
                 #[cfg(not(offload = "yes"))]{
-                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
-                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                    peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
                 }
                 
                 RDMA_CTLINFO.localIp_set(localIpAddr);
@@ -366,10 +366,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 let localIpAddr;
                 #[cfg(offload = "yes")]{
-                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.21").unwrap()).to_be();
                 }
                 #[cfg(not(offload = "yes"))]{
-                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.3").unwrap()).to_be();
+                    localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.1").unwrap()).to_be();
                 }
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&localIpAddr);

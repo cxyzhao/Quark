@@ -312,6 +312,14 @@ impl RDMASvcClient {
                                 }
                             };
 
+                           
+
+                            let head = self.cliShareRegion.lock().cq.head.load(Ordering::SeqCst);
+                            let tail = self.cliShareRegion.lock().cq.tail.load(Ordering::SeqCst);
+                            let ringMask = self.cliShareRegion.lock().cq.RingMask();
+
+                            error!("by_cz RDMARespMsg::RDMAConnect sockfd {} h{} t{} r{} ", sockfd, head, tail, ringMask);
+
                             let sockInfo = GlobalIOMgr()
                                 .GetByHost(sockfd)
                                 .unwrap()
