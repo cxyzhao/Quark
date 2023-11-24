@@ -566,7 +566,7 @@ impl RDMAAgent {
                                 if dstIpAddr == 0 {
                                     self.SendControlMsgInternal(
                                         msg.sockfd,
-                                        u32::from(Ipv4Addr::from_str("192.168.2.23").unwrap()).to_be(),
+                                        u32::from(Ipv4Addr::from_str("192.168.2.27").unwrap()).to_be(),
                                         srcVpcIpAddr,
                                         msg.srcPort,
                                         dstIpAddr,
