@@ -31,6 +31,10 @@ use super::qlib::rdma_share::*;
 use super::qlib::socket_buf::SocketBuff;
 // use super::qlib::kernel::TSC;
 
+// AES-GCM for encrypt
+use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256-GCM
+use aes_gcm::aead::{Aead, NewAead};
+
 #[derive(Clone, Copy, Debug)]
 pub enum ChannelStatus {
     CLOSED = 0,
@@ -449,6 +453,14 @@ impl RDMAChannelIntern {
         }
     }
 
+    fn encrypt_data(&self, addr: *const u8, len: usize, key: &[u8; 32], nonce: &[u8; 12]) -> Result<()>  {
+        let aead = Aes256Gcm::new(Key::from_slice(key));
+        let data = unsafe { std::slice::from_raw_parts(addr, len) };
+    
+        aead.encrypt(Nonce::from_slice(nonce), data.as_ref());
+        return Ok(());
+    }
+
     pub fn RDMASendLocked(
         &self,
         mut remoteInfo: MutexGuard<ChannelRDMAInfo>,
@@ -479,6 +491,21 @@ impl RDMAChannelIntern {
             // println!("***********len = {}", totalLen);
 
             if len != 0 {
+                
+                const KEY: [u8; 32] = [
+                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                ]; 
+                const NONCE: [u8; 12] = [
+                    0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+                    0x12, 0x34, 0x56, 0x78,
+                ]; 
+                let addr_ptr = addr as *const u8; // Convert the u64 address to a pointer
+                let encrypted_data = self.encrypt_data(addr_ptr, len, &KEY, &NONCE)
+                .expect("Encryption failed");
+
                 self.RDMAWriteImm(
                     addr,
                     remoteInfo.raddr + remoteInfo.offset as u64,
