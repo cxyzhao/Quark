@@ -290,7 +290,7 @@ impl RDMASvcClient {
                     sin_port: 3340u16.to_be(),
                     sin_addr: libc::in_addr {
                         //192.168.2.1
-                        s_addr: u32::from_be_bytes([192, 168, 2, 1]).to_be(),
+                        s_addr: u32::from_be_bytes([192, 168, 2, 5]).to_be(),
                     },
                     sin_zero: mem::zeroed(),
                 };
@@ -313,7 +313,7 @@ impl RDMASvcClient {
                 sin_port: 3340u16.to_be(),
                 sin_addr: libc::in_addr {
                     //192.168.2.21
-                    s_addr: u32::from_be_bytes([192, 168, 2, 21]).to_be(),
+                    s_addr: u32::from_be_bytes([192, 168, 2, 25]).to_be(),
                 },
                 sin_zero: mem::zeroed(),
                 }
