@@ -274,6 +274,10 @@ impl SocketBuffIntern {
         return self.readBuf.lock().GetSpaceBuf();
     }
 
+    pub fn GetReadDataAddr(&self) -> (u64, usize) {
+        return self.readBuf.lock().GetDataBuf();
+    }
+
     pub fn ProduceReadBuf(&self, size: usize) -> bool {
         return self.readBuf.lock().Produce(size);
     }

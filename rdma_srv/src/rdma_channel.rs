@@ -29,9 +29,10 @@ use super::qlib::common::*;
 use super::qlib::linux_def::*;
 use super::qlib::rdma_share::*;
 use super::qlib::socket_buf::SocketBuff;
-use super::qlib::kernel::TSC;
+use super::qlib::kernel::*;
 
 // AES-GCM for encrypt
+pub static CurTSC: Tsc = Tsc::New();
 use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256-GCM
 use aes_gcm::aead::{Aead, NewAead};
 
@@ -113,23 +114,37 @@ const DST_IP: u32 = 0xC0A80002; // Destination IP address (e.g., 192.168.0.2)
 const SRC_MAC: [u8; 6] = [0x00, 0x0C, 0x29, 0x48, 0x57, 0x54]; // Source MAC address
 const DST_MAC: [u8; 6] = [0x00, 0x0C, 0x29, 0x12, 0x34, 0x56]; // Destination MAC address
 
+#[derive(Clone)]
 pub struct EthernetFrame {
     // Assumed structure of an Ethernet frame
-    data: Vec<u8>,
+    data: [u8; 8192], 
 }
 
 pub struct VxlanPacket {
     // Structure of a VXLAN encapsulated packet
     ethernet_frame: EthernetFrame,
     // ... Other VXLAN-related fields
+    // VXLAN-specific fields
+    vni: u32,          // VXLAN Network Identifier
+    src_ip: u32,       // Source IP address
+    dst_ip: u32,       // Destination IP address
+    src_mac: [u8; 6],  // Source MAC address
+    dst_mac: [u8; 6],  // Destination MAC address
+    vxlan_port: u16,   // VXLAN UDP port
 }
 
 static ENCRYPT_CYCLE: AtomicU64 = AtomicU64::new(0);
 static ENCRYPT_COUNT: AtomicU64 = AtomicU64::new(0);
-static LPM_CYCLE: AtomicU64 = AtomicU64::new(0);
-static LPM_COUNT: AtomicU64 = AtomicU64::new(0);
-static VXLAN_CYCLE: AtomicU64 = AtomicU64::new(0);
-static VXLAN_COUNT: AtomicU64 = AtomicU64::new(0);
+static DECRYPT_CYCLE: AtomicU64 = AtomicU64::new(0);
+static DECRYPT_COUNT: AtomicU64 = AtomicU64::new(0);
+static LPM_SEND_CYCLE: AtomicU64 = AtomicU64::new(0);
+static LPM_SEND_COUNT: AtomicU64 = AtomicU64::new(0);
+static LPM_RECV_CYCLE: AtomicU64 = AtomicU64::new(0);
+static LPM_RECV_COUNT: AtomicU64 = AtomicU64::new(0);
+static VXLAN_ENCAPSULATE_CYCLE: AtomicU64 = AtomicU64::new(0);
+static VXLAN_ENCAPSULATE_COUNT: AtomicU64 = AtomicU64::new(0);
+static VXLAN_DECAPSULATE_CYCLE: AtomicU64 = AtomicU64::new(0);
+static VXLAN_DECAPSULATE_COUNT: AtomicU64 = AtomicU64::new(0);
 
 fn update_encrypt_data(added_cycle: u64) {
     let count = ENCRYPT_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
@@ -141,23 +156,54 @@ fn update_encrypt_data(added_cycle: u64) {
     }
 }
 
-fn update_lpm_data(added_cycle: u64) {
-    let count = LPM_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
-    LPM_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+fn update_decrypt_data(added_cycle: u64) {
+    let count = DECRYPT_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+    DECRYPT_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
 
     if count % 1000 == 0 {
-        let total_cycles = LPM_CYCLE.load(Ordering::SeqCst);
-        println!("LPM count: {}, Total cycles: {}", count, total_cycles);
+        let total_cycles = DECRYPT_CYCLE.load(Ordering::SeqCst);
+        println!("Decryption count: {}, Total cycles: {}", count, total_cycles);
     }
 }
 
-fn update_vxlan_data(added_cycle: u64) {
-    let count = VXLAN_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
-    VXLAN_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+fn update_lpm_data(added_cycle: u64, send: bool) {
+    if send {
+        let count = LPM_SEND_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+        LPM_SEND_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+
+        if count % 1000 == 0 {
+            let total_cycles = LPM_SEND_CYCLE.load(Ordering::SeqCst);
+            println!("LPM Send count: {}, Total cycles: {}", count, total_cycles);
+        }
+    }else{
+        let count = LPM_RECV_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+        LPM_RECV_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+
+        if count % 1000 == 0 {
+            let total_cycles = LPM_RECV_CYCLE.load(Ordering::SeqCst);
+            println!("LPM Recv count: {}, Total cycles: {}", count, total_cycles);
+        }
+
+    }
+}
+
+fn update_vxlan_encapsulate_data(added_cycle: u64) {
+    let count = VXLAN_ENCAPSULATE_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+    VXLAN_ENCAPSULATE_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
 
     if count % 1000 == 0 {
-        let total_cycles = VXLAN_CYCLE.load(Ordering::SeqCst);
-        println!("VXLAN count: {}, Total cycles: {}", count, total_cycles);
+        let total_cycles = VXLAN_ENCAPSULATE_CYCLE.load(Ordering::SeqCst);
+        println!("VXLAN Encap count: {}, Total cycles: {}", count, total_cycles);
+    }
+}
+
+fn update_vxlan_decapsulate_data(added_cycle: u64) {
+    let count = VXLAN_DECAPSULATE_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+    VXLAN_DECAPSULATE_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+
+    if count % 1000 == 0 {
+        let total_cycles = VXLAN_DECAPSULATE_CYCLE.load(Ordering::SeqCst);
+        println!("VXLAN decap count: {}, Total cycles: {}", count, total_cycles);
     }
 }
 
@@ -272,7 +318,7 @@ impl RDMAChannelIntern {
 
     pub fn ProcessRDMAWriteImmFinish(&self, finSent: bool) {
         // println!("qq1: RDMAChannel::ProcessRDMAWriteImmFinish enter");
-        // RDMA_SRV.timestamps.lock().push(TSC.Rdtsc());
+        // RDMA_SRV.timestamps.lock().push(CurTSC.Rdtsc());
         // let len = RDMA_SRV.timestamps.lock().len();
         // let mut i = 0;
         // let v1 = RDMA_SRV.timestamps.lock()[0];
@@ -463,6 +509,45 @@ impl RDMAChannelIntern {
         self.remoteChannelRDMAInfo.lock().remoteId
     }
 
+    fn decrypt_data(&self, addr: *const u8, len: usize, key: &[u8; 32], nonce: &[u8; 12]) -> Result<()>  {
+        let before = CurTSC.Rdtsc() as u64;
+    
+        let aead = Aes256Gcm::new(Key::from_slice(key));
+        let data = unsafe { std::slice::from_raw_parts(addr, len) };
+    
+        aead.decrypt(Nonce::from_slice(nonce), data.as_ref());
+    
+        let after = CurTSC.Rdtsc() as u64;
+        update_decrypt_data(after - before);
+    
+        return Ok(());
+    }
+
+    fn vxlan_decapsulate(&self, addr: *const u8, len: usize) -> Result<EthernetFrame> {
+        let before = CurTSC.Rdtsc() as u64;
+    
+        // Ensure we have a buffer large enough to hold a VxlanPacket
+        let mut buffer: Vec<u8>;
+        let vxlan_packet: &VxlanPacket;
+        if len < std::mem::size_of::<VxlanPacket>() {
+            // If the provided data is smaller than the size of VxlanPacket,
+            // create a buffer and fill it with data, padding the rest with zeros
+            buffer = vec![0; 1500];
+            vxlan_packet = unsafe { &*(buffer.as_ptr() as *const VxlanPacket) };
+        } else {
+            // If the length is sufficient, just cast the pointer to a VxlanPacket
+            vxlan_packet = unsafe { &*(addr as *const VxlanPacket) };
+        }
+    
+        // Extract the Ethernet frame from the VXLAN packet
+        let ethernet_frame = vxlan_packet.ethernet_frame.clone();
+    
+        let after = CurTSC.Rdtsc() as u64;
+        update_vxlan_decapsulate_data(after - before);
+    
+        Ok(ethernet_frame)
+    }
+
     pub fn ProcessRDMARecvWriteImm(&self, qpNum: u32, recvCount: u64, finReceived: bool) {
         if finReceived {
             *self.finReceived.lock() = true;
@@ -474,6 +559,33 @@ impl RDMAChannelIntern {
         if recvCount > 0 {
             // debug!("ProcessRDMARecvWriteImm::1, channelId: {}, recvCount: {}", self.localId, recvCount);
             let (mut trigger, _addr, _len) = self.sockBuf.ProduceAndGetFreeReadBuf(recvCount as usize);
+            
+            const KEY: [u8; 32] = [
+                0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+            ]; 
+            const NONCE: [u8; 12] = [
+                0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+                0x12, 0x34, 0x56, 0x78,
+            ]; 
+            let (addr_ptr, available) = self.sockBuf.GetReadDataAddr(); // Convert the u64 address to a pointer
+            let addr_ptr = addr_ptr as *const u8;
+            let len = recvCount as usize;
+            let decrypted_data = self.decrypt_data(addr_ptr, len, &KEY, &NONCE)
+            .expect("Decryption failed");
+
+            let src_ip = "10.2.0.100";
+            self.longest_prefix_match(src_ip, false);
+            // match self.longest_prefix_match(src_ip) {
+            //     Some(dst) => println!("Destination IP for {} is {}", src_ip, dst),
+            //     None => println!("No match found for {}", src_ip),
+            // }
+
+            let eth_packet = self.vxlan_decapsulate(addr_ptr, len)
+            .expect("Failed to encapsulate VXLAN packet");
+
             // debug!("ProcessRDMARecvWriteImm::2, trigger {}", trigger);
             // println!(
             //     "ProcessRDMARecvWriteImm::3, channelId: {}, len: {}, recvCount: {}, trigger: {}",
@@ -557,7 +669,7 @@ impl RDMAChannelIntern {
 
     pub fn RDMASend(&self) {
         // println!("qq1: RDMAChannel::RDMASend enter");
-        // RDMA_SRV.timestamps.lock().push(TSC.Rdtsc());
+        // RDMA_SRV.timestamps.lock().push(CurTSC.Rdtsc());
         let remoteInfo = self.remoteChannelRDMAInfo.lock();
         if remoteInfo.sending == true {
             return; // the sending is ongoing
@@ -579,23 +691,21 @@ impl RDMAChannelIntern {
         }
     }
 
-    #[inline(never)]
-    #[no_mangle]
     fn encrypt_data(&self, addr: *const u8, len: usize, key: &[u8; 32], nonce: &[u8; 12]) -> Result<()>  {
-        let before = TSC.Rdtsc() as u64;
+        let before = CurTSC.Rdtsc() as u64;
 
         let aead = Aes256Gcm::new(Key::from_slice(key));
         let data = unsafe { std::slice::from_raw_parts(addr, len) };
     
         aead.encrypt(Nonce::from_slice(nonce), data.as_ref());
 
-        let after = TSC.Rdtsc() as u64;
+        let after = CurTSC.Rdtsc() as u64;
         update_encrypt_data(after - before);
         return Ok(());
     }
 
-    fn longest_prefix_match(&self, src_ip: &str) -> Option<String> {
-        let before = TSC.Rdtsc() as u64;
+    fn longest_prefix_match(&self, src_ip: &str, send: bool) -> Option<String> {
+        let before = CurTSC.Rdtsc() as u64;
 
         let src_addr = match Ipv4Addr::from_str(src_ip) {
             Ok(addr) => addr,
@@ -615,14 +725,14 @@ impl RDMAChannelIntern {
                 }
             }
         }
-        let after = TSC.Rdtsc() as u64;
-        update_lpm_data(after - before);
+        let after = CurTSC.Rdtsc() as u64;
+        update_lpm_data(after - before, send);
 
         max_match.map(|p| p.destination.to_string())
     }
 
     fn vxlan_encapsulate(&self, addr: *const u8, len: usize) -> Result<VxlanPacket> {
-        let before = TSC.Rdtsc() as u64;
+        let before = CurTSC.Rdtsc() as u64;
 
         // Safely read data from the memory pointed to by addr
         let data = unsafe { 
@@ -630,19 +740,34 @@ impl RDMAChannelIntern {
             std::slice::from_raw_parts(addr, len)
         };
     
-        // Create an Ethernet frame
+      // Create a fixed-size array with a length of 1500 bytes, initially filled with zeros.
+        let mut array_data = [0u8; 8192];
+
+        // Determine the length of data to copy. It should be the lesser of the data's length or 1500.
+        let data_len = data.len().min(8192);
+
+        // Copy the data from the Vec<u8> to the fixed-size array.
+        // This operation copies only the necessary data and prevents any overflow.
+        array_data[..data_len].copy_from_slice(&data[..data_len]);
+
+        // Create an EthernetFrame instance with the fixed-size array.
         let ethernet_frame = EthernetFrame {
-            data: data.to_vec(),
+            data: array_data,
         };
     
         // Build a VXLAN packet
         let vxlan_packet = VxlanPacket {
             ethernet_frame,
-            // ... Initialize other VXLAN fields
+            vni: VXLAN_VNI,             // VXLAN Network Identifier
+            src_ip: SRC_IP,             // Source IP address
+            dst_ip: DST_IP,             // Destination IP address
+            src_mac: SRC_MAC,           // Source MAC address
+            dst_mac: DST_MAC,           // Destination MAC address
+            vxlan_port: VXLAN_UDP_PORT, // Standard VXLAN UDP port
         };
 
-        let after = TSC.Rdtsc() as u64;
-        update_vxlan_data(after - before);
+        let after = CurTSC.Rdtsc() as u64;
+        update_vxlan_encapsulate_data(after - before);
         Ok(vxlan_packet)
     }
     
@@ -693,7 +818,7 @@ impl RDMAChannelIntern {
                 .expect("Encryption failed");
 
                 let src_ip = "10.2.0.100";
-                self.longest_prefix_match(src_ip);
+                self.longest_prefix_match(src_ip, true);
                 // match self.longest_prefix_match(src_ip) {
                 //     Some(dst) => println!("Destination IP for {} is {}", src_ip, dst),
                 //     None => println!("No match found for {}", src_ip),
