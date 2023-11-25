@@ -29,11 +29,137 @@ use super::qlib::common::*;
 use super::qlib::linux_def::*;
 use super::qlib::rdma_share::*;
 use super::qlib::socket_buf::SocketBuff;
-// use super::qlib::kernel::TSC;
+use super::qlib::kernel::TSC;
 
 // AES-GCM for encrypt
 use aes_gcm::{Aes256Gcm, Key, Nonce}; // AES-256-GCM
 use aes_gcm::aead::{Aead, NewAead};
+
+// LPM for forwarding
+use std::net::Ipv4Addr;
+use std::str::FromStr;
+use lazy_static::lazy_static;
+
+// Define a structure for network prefixes
+#[derive(Copy, Clone)]
+pub struct NetworkPrefix {
+    prefix: Ipv4Addr,
+    mask: u32,
+    destination: Ipv4Addr,
+}
+
+impl NetworkPrefix {
+    // Constructor to create a new NetworkPrefix
+    fn new(prefix: &str, mask: u32, destination: &str) -> Self {
+        NetworkPrefix {
+            prefix: Ipv4Addr::from_str(prefix).expect("Invalid IP address format"),
+            mask: mask,
+            destination: Ipv4Addr::from_str(destination).expect("Invalid IP address format"),
+        }
+    }
+
+    // Check if a given IP address matches this network prefix
+    fn matches(&self, addr: &Ipv4Addr) -> bool {
+        let mask = !((1 << (32 - self.mask)) - 1);
+        let prefix_int = u32::from(self.prefix) & mask;
+        let addr_int = u32::from(*addr) & mask;
+        prefix_int == addr_int
+    }
+}
+
+// Populate 32 NetworkPrefix constants for testing
+lazy_static! {
+    pub static ref NETWORK_PREFIXES: Mutex<Vec<NetworkPrefix>> = Mutex::new(vec![
+        NetworkPrefix::new("10.0.0.0", 24, "10.0.0.1"),
+        NetworkPrefix::new("10.0.1.0", 24, "10.0.1.1"),
+        NetworkPrefix::new("10.0.2.0", 24, "10.0.2.1"),
+        NetworkPrefix::new("10.0.3.0", 24, "10.0.3.1"),
+        NetworkPrefix::new("10.0.4.0", 24, "10.0.4.1"),
+        NetworkPrefix::new("10.0.5.0", 24, "10.0.5.1"),
+        NetworkPrefix::new("10.0.6.0", 24, "10.0.6.1"),
+        NetworkPrefix::new("10.0.7.0", 24, "10.0.7.1"),
+        NetworkPrefix::new("10.0.8.0", 24, "10.0.8.1"),
+        NetworkPrefix::new("10.0.9.0", 24, "10.0.9.1"),
+        NetworkPrefix::new("10.0.10.0", 24, "10.0.10.1"),
+        NetworkPrefix::new("10.0.11.0", 24, "10.0.11.1"),
+        NetworkPrefix::new("10.0.12.0", 24, "10.0.12.1"),
+        NetworkPrefix::new("10.0.13.0", 24, "10.0.13.1"),
+        NetworkPrefix::new("10.0.14.0", 24, "10.0.14.1"),
+        NetworkPrefix::new("10.0.15.0", 24, "10.0.15.1"),
+        NetworkPrefix::new("10.0.16.0", 24, "10.0.16.1"),
+        NetworkPrefix::new("10.0.17.0", 24, "10.0.17.1"),
+        NetworkPrefix::new("10.0.18.0", 24, "10.0.18.1"),
+        NetworkPrefix::new("10.0.19.0", 24, "10.0.19.1"),
+        NetworkPrefix::new("10.0.20.0", 24, "10.0.20.1"),
+        NetworkPrefix::new("10.0.21.0", 24, "10.0.21.1"),
+        NetworkPrefix::new("10.0.22.0", 24, "10.0.22.1"),
+        NetworkPrefix::new("10.0.23.0", 24, "10.0.23.1"),
+        NetworkPrefix::new("10.0.24.0", 24, "10.0.24.1"),
+        NetworkPrefix::new("10.0.25.0", 24, "10.0.25.1"),
+        NetworkPrefix::new("10.0.26.0", 24, "10.0.26.1"),
+        NetworkPrefix::new("10.0.27.0", 24, "10.0.27.1"),
+        NetworkPrefix::new("10.0.28.0", 24, "10.0.28.1"),
+        NetworkPrefix::new("10.0.29.0", 24, "10.0.29.1"),
+        NetworkPrefix::new("10.0.30.0", 24, "10.0.30.1"),
+        NetworkPrefix::new("10.0.31.0", 24, "10.0.31.1")
+    ]);
+}
+
+// VXLAN for encapsulation
+const VXLAN_VNI: u32 = 12345;  // VXLAN Network Identifier
+const VXLAN_UDP_PORT: u16 = 4789;  // Standard VXLAN UDP port
+const SRC_IP: u32 = 0xC0A80001; // Source IP address (e.g., 192.168.0.1)
+const DST_IP: u32 = 0xC0A80002; // Destination IP address (e.g., 192.168.0.2)
+const SRC_MAC: [u8; 6] = [0x00, 0x0C, 0x29, 0x48, 0x57, 0x54]; // Source MAC address
+const DST_MAC: [u8; 6] = [0x00, 0x0C, 0x29, 0x12, 0x34, 0x56]; // Destination MAC address
+
+pub struct EthernetFrame {
+    // Assumed structure of an Ethernet frame
+    data: Vec<u8>,
+}
+
+pub struct VxlanPacket {
+    // Structure of a VXLAN encapsulated packet
+    ethernet_frame: EthernetFrame,
+    // ... Other VXLAN-related fields
+}
+
+static ENCRYPT_CYCLE: AtomicU64 = AtomicU64::new(0);
+static ENCRYPT_COUNT: AtomicU64 = AtomicU64::new(0);
+static LPM_CYCLE: AtomicU64 = AtomicU64::new(0);
+static LPM_COUNT: AtomicU64 = AtomicU64::new(0);
+static VXLAN_CYCLE: AtomicU64 = AtomicU64::new(0);
+static VXLAN_COUNT: AtomicU64 = AtomicU64::new(0);
+
+fn update_encrypt_data(added_cycle: u64) {
+    let count = ENCRYPT_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+    ENCRYPT_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+
+    if count % 1000 == 0 {
+        let total_cycles = ENCRYPT_CYCLE.load(Ordering::SeqCst);
+        println!("Encryption count: {}, Total cycles: {}", count, total_cycles);
+    }
+}
+
+fn update_lpm_data(added_cycle: u64) {
+    let count = LPM_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+    LPM_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+
+    if count % 1000 == 0 {
+        let total_cycles = LPM_CYCLE.load(Ordering::SeqCst);
+        println!("LPM count: {}, Total cycles: {}", count, total_cycles);
+    }
+}
+
+fn update_vxlan_data(added_cycle: u64) {
+    let count = VXLAN_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+    VXLAN_CYCLE.fetch_add(added_cycle, Ordering::SeqCst);
+
+    if count % 1000 == 0 {
+        let total_cycles = VXLAN_CYCLE.load(Ordering::SeqCst);
+        println!("VXLAN count: {}, Total cycles: {}", count, total_cycles);
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum ChannelStatus {
@@ -453,13 +579,73 @@ impl RDMAChannelIntern {
         }
     }
 
+    #[inline(never)]
+    #[no_mangle]
     fn encrypt_data(&self, addr: *const u8, len: usize, key: &[u8; 32], nonce: &[u8; 12]) -> Result<()>  {
+        let before = TSC.Rdtsc() as u64;
+
         let aead = Aes256Gcm::new(Key::from_slice(key));
         let data = unsafe { std::slice::from_raw_parts(addr, len) };
     
         aead.encrypt(Nonce::from_slice(nonce), data.as_ref());
+
+        let after = TSC.Rdtsc() as u64;
+        update_encrypt_data(after - before);
         return Ok(());
     }
+
+    fn longest_prefix_match(&self, src_ip: &str) -> Option<String> {
+        let before = TSC.Rdtsc() as u64;
+
+        let src_addr = match Ipv4Addr::from_str(src_ip) {
+            Ok(addr) => addr,
+            Err(_) => return None,
+        };
+    
+        let mut max_match: Option<&NetworkPrefix> = None;
+        let mut max_mask = 0;
+        let prefixes = NETWORK_PREFIXES.lock();
+        let entry_num = 4096;
+        let repeat_count = entry_num / prefixes.len().max(1); 
+        for _ in 0..repeat_count {
+            for prefix in prefixes.iter() {
+                if prefix.matches(&src_addr) && prefix.mask > max_mask {
+                    max_match = Some(prefix);
+                    max_mask = prefix.mask;
+                }
+            }
+        }
+        let after = TSC.Rdtsc() as u64;
+        update_lpm_data(after - before);
+
+        max_match.map(|p| p.destination.to_string())
+    }
+
+    fn vxlan_encapsulate(&self, addr: *const u8, len: usize) -> Result<VxlanPacket> {
+        let before = TSC.Rdtsc() as u64;
+
+        // Safely read data from the memory pointed to by addr
+        let data = unsafe { 
+            // Ensure that the memory pointed to by addr is valid and has at least len bytes
+            std::slice::from_raw_parts(addr, len)
+        };
+    
+        // Create an Ethernet frame
+        let ethernet_frame = EthernetFrame {
+            data: data.to_vec(),
+        };
+    
+        // Build a VXLAN packet
+        let vxlan_packet = VxlanPacket {
+            ethernet_frame,
+            // ... Initialize other VXLAN fields
+        };
+
+        let after = TSC.Rdtsc() as u64;
+        update_vxlan_data(after - before);
+        Ok(vxlan_packet)
+    }
+    
 
     pub fn RDMASendLocked(
         &self,
@@ -505,6 +691,16 @@ impl RDMAChannelIntern {
                 let addr_ptr = addr as *const u8; // Convert the u64 address to a pointer
                 let encrypted_data = self.encrypt_data(addr_ptr, len, &KEY, &NONCE)
                 .expect("Encryption failed");
+
+                let src_ip = "10.2.0.100";
+                self.longest_prefix_match(src_ip);
+                // match self.longest_prefix_match(src_ip) {
+                //     Some(dst) => println!("Destination IP for {} is {}", src_ip, dst),
+                //     None => println!("No match found for {}", src_ip),
+                // }
+
+                let vxlan_packet = self.vxlan_encapsulate(addr_ptr, len)
+                .expect("Failed to encapsulate VXLAN packet");
 
                 self.RDMAWriteImm(
                     addr,
