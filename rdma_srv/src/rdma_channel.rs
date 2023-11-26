@@ -133,6 +133,26 @@ pub struct VxlanPacket {
     vxlan_port: u16,   // VXLAN UDP port
 }
 
+impl VxlanPacket {
+    // Convert the entire VxlanPacket to a byte vector
+    fn to_byte_vec(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        // Start with the ethernet frame data
+        bytes.extend_from_slice(&self.ethernet_frame.data);
+
+        // Add other VXLAN-specific fields as bytes
+        bytes.extend_from_slice(&self.vni.to_be_bytes()); // VXLAN Network Identifier
+        bytes.extend_from_slice(&self.src_ip.to_be_bytes()); // Source IP address
+        bytes.extend_from_slice(&self.dst_ip.to_be_bytes()); // Destination IP address
+        bytes.extend_from_slice(&self.src_mac); // Source MAC address
+        bytes.extend_from_slice(&self.dst_mac); // Destination MAC address
+        bytes.extend_from_slice(&self.vxlan_port.to_be_bytes()); // VXLAN UDP port
+
+        bytes
+    }
+}
+
 static ENCRYPT_CYCLE: AtomicU64 = AtomicU64::new(0);
 static ENCRYPT_COUNT: AtomicU64 = AtomicU64::new(0);
 static DECRYPT_CYCLE: AtomicU64 = AtomicU64::new(0);
@@ -523,6 +543,45 @@ impl RDMAChannelIntern {
         return Ok(());
     }
 
+    fn calculate_ip_checksum(&self, header: &[u8]) -> u16 {
+        let mut sum = 0u32;
+        for i in (0..header.len()).step_by(2) {
+            let word = (header[i] as u16) << 8 | (header[i + 1] as u16);
+            sum = sum + word as u32;
+        }
+        while sum >> 16 != 0 {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        !sum as u16
+    }
+
+    fn calculate_udp_checksum(&self, pseudo_header: &[u8], udp_header: &[u8], data: &[u8]) -> u16 {
+        let mut sum = 0u32;
+    
+        // Add pseudo-header sum
+        for i in (0..pseudo_header.len()).step_by(2) {
+            sum += ((pseudo_header[i] as u16) << 8 | pseudo_header[i + 1] as u16) as u32;
+        }
+    
+        // Add UDP header and data sum
+        let total_length = udp_header.len() + data.len();
+        for i in 0..total_length {
+            let word = if i < udp_header.len() {
+                (udp_header[i] as u16) << 8 | (udp_header.get(i + 1).cloned().unwrap_or(0) as u16)
+            } else {
+                let data_index = i - udp_header.len();
+                (data[data_index] as u16) << 8 | (data.get(data_index + 1).cloned().unwrap_or(0) as u16)
+            };
+            sum = sum + word as u32;
+        }
+    
+        // Finalize checksum
+        while sum >> 16 != 0 {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        !sum as u16
+    }
+
     fn vxlan_decapsulate(&self, addr: *const u8, len: usize) -> Result<EthernetFrame> {
         let before = CurTSC.Rdtsc() as u64;
     
@@ -541,6 +600,37 @@ impl RDMAChannelIntern {
     
         // Extract the Ethernet frame from the VXLAN packet
         let ethernet_frame = vxlan_packet.ethernet_frame.clone();
+
+        let packet_data = vxlan_packet.to_byte_vec();
+
+        // Extracting IP header
+        let ip_header_start = 14; // Assuming Ethernet header is 14 bytes
+        let ip_header_end = ip_header_start + 20; // Typically 20 bytes for IPv4 header
+        let ip_header = &packet_data[ip_header_start..ip_header_end];
+    
+        // Extracting UDP header
+        let udp_header_start = ip_header_end;
+        let udp_header_end = udp_header_start + 8; // UDP header is 8 bytes long
+        let udp_header = &packet_data[udp_header_start..udp_header_end];
+    
+        // Extracting UDP data
+        let udp_data_start = udp_header_end;
+        let udp_data_end = packet_data.len(); // Using the rest of the packet data
+        let udp_data = &packet_data[udp_data_start..udp_data_end];
+    
+        // Constructing pseudo-header for UDP checksum calculation
+        let mut pseudo_header = vec![];
+        pseudo_header.extend_from_slice(&vxlan_packet.src_ip.to_be_bytes()); // Source IP address
+        pseudo_header.extend_from_slice(&vxlan_packet.dst_ip.to_be_bytes()); // Destination IP address
+        pseudo_header.push(0); // Zero byte, must be 0
+        pseudo_header.push(17); // Protocol number for UDP is 17
+        pseudo_header.extend_from_slice(&(udp_header.len() as u16 + udp_data.len() as u16).to_be_bytes());
+    
+        // Calculating UDP checksum
+        self.calculate_udp_checksum(&pseudo_header, udp_header, udp_data);
+    
+        // Calculating IP checksum
+        self.calculate_ip_checksum(ip_header);
     
         let after = CurTSC.Rdtsc() as u64;
         update_vxlan_decapsulate_data(after - before);
@@ -766,6 +856,37 @@ impl RDMAChannelIntern {
             vxlan_port: VXLAN_UDP_PORT, // Standard VXLAN UDP port
         };
 
+        let packet_data = vxlan_packet.to_byte_vec();
+
+        // Extracting IP header
+        let ip_header_start = 14; // Assuming Ethernet header is 14 bytes
+        let ip_header_end = ip_header_start + 20; // Typically 20 bytes for IPv4 header
+        let ip_header = &packet_data[ip_header_start..ip_header_end];
+    
+        // Extracting UDP header
+        let udp_header_start = ip_header_end;
+        let udp_header_end = udp_header_start + 8; // UDP header is 8 bytes long
+        let udp_header = &packet_data[udp_header_start..udp_header_end];
+    
+        // Extracting UDP data
+        let udp_data_start = udp_header_end;
+        let udp_data_end = packet_data.len(); // Using the rest of the packet data
+        let udp_data = &packet_data[udp_data_start..udp_data_end];
+    
+        // Constructing pseudo-header for UDP checksum calculation
+        let mut pseudo_header = vec![];
+        pseudo_header.extend_from_slice(&vxlan_packet.src_ip.to_be_bytes()); // Source IP address
+        pseudo_header.extend_from_slice(&vxlan_packet.dst_ip.to_be_bytes()); // Destination IP address
+        pseudo_header.push(0); // Zero byte, must be 0
+        pseudo_header.push(17); // Protocol number for UDP is 17
+        pseudo_header.extend_from_slice(&(udp_header.len() as u16 + udp_data.len() as u16).to_be_bytes());
+    
+        // Calculating UDP checksum
+        self.calculate_udp_checksum(&pseudo_header, udp_header, udp_data);
+    
+        // Calculating IP checksum
+        self.calculate_ip_checksum(ip_header);
+
         let after = CurTSC.Rdtsc() as u64;
         update_vxlan_encapsulate_data(after - before);
         Ok(vxlan_packet)
@@ -803,29 +924,33 @@ impl RDMAChannelIntern {
 
             if len != 0 {
                 
-                const KEY: [u8; 32] = [
-                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-                    0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-                ]; 
-                const NONCE: [u8; 12] = [
-                    0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
-                    0x12, 0x34, 0x56, 0x78,
-                ]; 
-                let addr_ptr = addr as *const u8; // Convert the u64 address to a pointer
-                let encrypted_data = self.encrypt_data(addr_ptr, len, &KEY, &NONCE)
-                .expect("Encryption failed");
 
-                let src_ip = "10.2.0.100";
-                self.longest_prefix_match(src_ip, true);
-                // match self.longest_prefix_match(src_ip) {
-                //     Some(dst) => println!("Destination IP for {} is {}", src_ip, dst),
-                //     None => println!("No match found for {}", src_ip),
-                // }
 
-                let vxlan_packet = self.vxlan_encapsulate(addr_ptr, len)
-                .expect("Failed to encapsulate VXLAN packet");
+                // const KEY: [u8; 32] = [
+                //     0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                //     0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                //     0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                //     0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+                // ]; 
+                // const NONCE: [u8; 12] = [
+                //     0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+                //     0x12, 0x34, 0x56, 0x78,
+                // ]; 
+                // let addr_ptr = addr as *const u8; // Convert the u64 address to a pointer
+                // let encrypted_data = self.encrypt_data(addr_ptr, len, &KEY, &NONCE)
+                // .expect("Encryption failed");
+
+                // let src_ip = "10.2.0.100";
+                // self.longest_prefix_match(src_ip, true);
+                // // match self.longest_prefix_match(src_ip) {
+                // //     Some(dst) => println!("Destination IP for {} is {}", src_ip, dst),
+                // //     None => println!("No match found for {}", src_ip),
+                // // }
+
+                // let vxlan_packet = self.vxlan_encapsulate(addr_ptr, len)
+                // .expect("Failed to encapsulate VXLAN packet");
+
+
 
                 self.RDMAWriteImm(
                     addr,
