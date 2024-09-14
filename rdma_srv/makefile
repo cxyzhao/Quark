@@ -9,7 +9,7 @@ clean:
 	# CARGO_TARGET_DIR=../target cargo clean
 ARCH := $(shell uname -m)
 ifeq ($(ARCH),aarch64)
-    RUSTFLAGS_VAR = '--cfg target_arch="aarch64" --cfg offload="yes"'
+    RUSTFLAGS_VAR = '--cfg target_arch="aarch64" --cfg offload="yes" --cfg gvmi="yes"'
 else
     RUSTFLAGS_VAR =
 endif

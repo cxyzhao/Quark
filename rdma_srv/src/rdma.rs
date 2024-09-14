@@ -372,6 +372,85 @@ impl Deref for RDMAContext {
     }
 }
 
+mod ucx_key {
+    use std::fs::File;
+    use std::io::{self, Read};
+    use std::path::Path;
+
+    use std::convert::TryInto;
+    use std::ffi::{CStr, CString};
+    use std::mem::transmute;
+    use uct_rust::*;
+    use uct_rust::{
+        channel_ext::{read_sized, write_sized},
+        uct::{
+            async_context::AsyncContext,
+            endpoint::EndPoint,
+            iface::{self, Iface},
+            memory_context::MemoryContext,
+            memory_handle::RemoteKey,
+            worker::Worker,
+        },
+    };
+
+    pub fn attach_mkey(
+        pd: &super::ProtectionDomain,
+        exported_key: u64,
+    ) -> super::Result<super::MemoryRegion> {
+        let context = MemoryContext::open_dev_tl(
+            CString::new("mlx5_2:1").unwrap().as_c_str(),
+            CString::new("rc_mlx5").unwrap().as_c_str(),
+        )
+        .unwrap();
+
+        let mut mr = super::MemoryRegion::default();
+
+        let mut params = uct_md_mem_attach_params {
+            field_mask: 0,
+            flags: 0,
+        };
+
+        unsafe {
+            // SAFETY of transmute: they are technically the same but created by two different binding
+            let status = uct_md_mem_attach_verbs(
+                context.memory_domain.0,
+                transmute(pd.0),
+                exported_key.to_le_bytes().as_ptr() as *const _,
+                &mut params,
+                transmute(&mut mr.0),
+            );
+
+            if status != ucs_status_t::UCS_OK {
+                return Err(super::Error::SysError(status as i32));
+            }
+        }
+
+        Ok(mr)
+    }
+
+    pub fn read_addr_and_mkey() -> super::Result<(u64, u64)> {
+        let path = Path::new("/tmp/GVMIMKEY");
+
+        // Open the file
+        let mut file = File::open(&path).map_err(|e| super::Error::IOError(e.to_string()))?;
+
+        // Buffer to store 16 bytes (8 bytes for each u64)
+        let mut buffer = [0u8; 16];
+
+        // Read exactly 16 bytes from the file
+        file.read_exact(&mut buffer).map_err(|e| super::Error::IOError(e.to_string()))?;
+
+        // Convert the first 8 bytes to u64 for addr
+        let addr = u64::from_le_bytes(buffer[0..8].try_into().expect("Failed to read addr"));
+
+        // Convert the next 8 bytes to u64 for mkey
+        let mkey = u64::from_le_bytes(buffer[8..16].try_into().expect("Failed to read mkey"));
+
+        // Return the values as a tuple
+        Ok((addr, mkey))
+    }
+}
+
 pub const MAX_SEND_WR: u32 = 100;
 pub const MAX_RECV_WR: u32 = 8192;
 pub const MAX_SEND_SGE: u32 = 1;
@@ -485,6 +564,24 @@ impl RDMAContext {
         }
 
         return Ok(MemoryRegion(mr));
+    }
+
+    pub fn GetGvmiKey(&self) -> Result<u64> {
+        let (addr, mkey) = ucx_key::read_addr_and_mkey()?;
+        Ok(mkey)
+    }
+
+    pub fn GetGvmiAddr(&self) -> Result<u64> {
+        let (addr, mkey) = ucx_key::read_addr_and_mkey()?;
+        Ok(addr)
+    }
+
+    pub fn CreateMemoryRegionWithGvmi(&self, attachable_key: u64) -> Result<MemoryRegion> {
+        let context = self.lock();
+
+        let mr = ucx_key::attach_mkey(&context.protectDomain, attachable_key);
+
+        mr
     }
 
     pub fn CompleteQueue(&self) -> *mut rdmaffi::ibv_cq {
