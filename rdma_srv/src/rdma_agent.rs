@@ -27,6 +27,8 @@ use std::time::Duration;
 use std::thread::sleep;
 use libc::{shm_open, mmap, ftruncate, c_char, PROT_READ, PROT_WRITE, MAP_SHARED, MAP_FAILED, O_RDWR};
 
+use crate::print;
+
 use super::id_mgr::IdMgr;
 use super::qlib::common::*;
 use super::qlib::linux_def::*;
@@ -65,6 +67,8 @@ pub struct RDMAAgentIntern {
     pub shareMemRegion: MemRegion,
 
     pub shareRegion: Mutex<&'static mut ClientShareRegion>,
+
+    pub shareRegionAddrGVMI: u64,
 
     pub ioBufIdMgr: Mutex<IdMgr>,
 
@@ -153,9 +157,21 @@ impl RDMAAgent {
         };
 
         //start from 2M registration.
-        let tcpMR = RDMA
-            .CreateMemoryRegion(&shareRegion.iobufs as *const _ as u64, 2 * 64 * 1024 * 1024)
-            .unwrap();
+        let tcpMR;
+        let gvmiAddr;
+        #[cfg(gvmi = "yes")]{
+            gvmiAddr = RDMA.GetGvmiAddr().unwrap();
+            let gvmiKey = RDMA.GetGvmiKey().unwrap();
+            tcpMR = RDMA
+                .CreateMemoryRegionWithGvmi(gvmiKey).unwrap();
+            println!("RDMAAgent::New, gvmiAddr: {}, gvmiKey: {}", gvmiAddr, gvmiKey);
+        }
+        #[cfg(not(gvmi = "yes"))]{
+            gvmiAddr = 0;
+            tcpMR = RDMA
+                .CreateMemoryRegion(&shareRegion.iobufs as *const _ as u64, 2 * 64 * 1024 * 1024)
+                .unwrap();
+        }
 
         let udpBufSent = &shareRegion.udpBufSent as *const _ as u64;
         let udpMR = RDMA
@@ -192,6 +208,7 @@ impl RDMAAgent {
                 len: size as u64,
             },
             shareRegion: Mutex::new(shareRegion),
+            shareRegionAddrGVMI: gvmiAddr,
             ioBufIdMgr: Mutex::new(IdMgr::Init(0, 1024)),
             keys: vec![[tcpMR.LKey(), tcpMR.RKey()]],
             memoryRegions: Mutex::new(vec![tcpMR]),
@@ -215,6 +232,7 @@ impl RDMAAgent {
                 let addr = 0 as *mut ClientShareRegion;
                 Mutex::new(&mut (*addr))
             },
+            shareRegionAddrGVMI: 0 as u64,
             ioBufIdMgr: Mutex::new(IdMgr::Init(0, 0)),
             keys: vec![[0, 0]],
             memoryRegions: Mutex::new(vec![]),
@@ -234,16 +252,31 @@ impl RDMAAgent {
         let channelId = RDMA_SRV.channelIdMgr.lock().AllocId().unwrap();
         let ioBufIndex = self.ioBufIdMgr.lock().AllocId().unwrap() as usize;
         let shareRegion = self.shareRegion.lock();
-        let sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
-            MemoryDef::DEFAULT_BUF_PAGE_COUNT,
-            &shareRegion.ioMetas[ioBufIndex].readBufAtoms as *const _ as u64,
-            &shareRegion.ioMetas[ioBufIndex].writeBufAtoms as *const _ as u64,
-            &shareRegion.ioMetas[ioBufIndex].consumeReadData as *const _ as u64,
-            &shareRegion.iobufs[ioBufIndex].read as *const _ as u64,
-            &shareRegion.iobufs[ioBufIndex].write as *const _ as u64,
-            true,
-        )));
-
+        let sockBuf;
+        #[cfg(not(gvmi = "yes"))]{
+            sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
+                MemoryDef::DEFAULT_BUF_PAGE_COUNT,
+                &shareRegion.ioMetas[ioBufIndex].readBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].writeBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].consumeReadData as *const _ as u64,
+                &shareRegion.iobufs[ioBufIndex].read as *const _ as u64,
+                &shareRegion.iobufs[ioBufIndex].write as *const _ as u64,
+                true,
+            )));
+        }
+        #[cfg(gvmi = "yes")]{
+            let rd_offset = (&shareRegion.iobufs[ioBufIndex].read as *const _ as u64) - (&shareRegion.clientBitmap as *const _ as u64);
+            let wr_offset = (&shareRegion.iobufs[ioBufIndex].write as *const _ as u64) - (&shareRegion.clientBitmap as *const _ as u64);
+            sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
+                MemoryDef::DEFAULT_BUF_PAGE_COUNT,
+                &shareRegion.ioMetas[ioBufIndex].readBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].writeBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].consumeReadData as *const _ as u64,
+                self.shareRegionAddrGVMI + rd_offset,
+                self.shareRegionAddrGVMI + wr_offset,
+                true,
+            )));
+        }
         let rdmaChannel = RDMAChannel::CreateRDMAChannel(
             channelId,
             self.keys[ioBufIndex / 1024][0],
@@ -266,15 +299,31 @@ impl RDMAAgent {
         let channelId = RDMA_SRV.channelIdMgr.lock().AllocId().unwrap();
         let ioBufIndex = self.ioBufIdMgr.lock().AllocId().unwrap() as usize;
         let shareRegion = self.shareRegion.lock();
-        let sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
-            MemoryDef::DEFAULT_BUF_PAGE_COUNT,
-            &shareRegion.ioMetas[ioBufIndex].readBufAtoms as *const _ as u64,
-            &shareRegion.ioMetas[ioBufIndex].writeBufAtoms as *const _ as u64,
-            &shareRegion.ioMetas[ioBufIndex].consumeReadData as *const _ as u64,
-            &shareRegion.iobufs[ioBufIndex].read as *const _ as u64,
-            &shareRegion.iobufs[ioBufIndex].write as *const _ as u64,
-            true,
-        )));
+        let sockBuf;
+        #[cfg(not(gvmi = "yes"))]{
+            sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
+                MemoryDef::DEFAULT_BUF_PAGE_COUNT,
+                &shareRegion.ioMetas[ioBufIndex].readBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].writeBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].consumeReadData as *const _ as u64,
+                &shareRegion.iobufs[ioBufIndex].read as *const _ as u64,
+                &shareRegion.iobufs[ioBufIndex].write as *const _ as u64,
+                true,
+            )));
+        }
+        #[cfg(gvmi = "yes")]{
+            let rd_offset = (&shareRegion.iobufs[ioBufIndex].read as *const _ as u64) - (&shareRegion.clientBitmap as *const _ as u64);
+            let wr_offset = (&shareRegion.iobufs[ioBufIndex].write as *const _ as u64) - (&shareRegion.clientBitmap as *const _ as u64);
+            sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
+                MemoryDef::DEFAULT_BUF_PAGE_COUNT,
+                &shareRegion.ioMetas[ioBufIndex].readBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].writeBufAtoms as *const _ as u64,
+                &shareRegion.ioMetas[ioBufIndex].consumeReadData as *const _ as u64,
+                self.shareRegionAddrGVMI + rd_offset,
+                self.shareRegionAddrGVMI + wr_offset,
+                true,
+            )));
+        }
 
         let rdmaChannel = RDMAChannel::CreateClientChannel(
             channelId,

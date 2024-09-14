@@ -62,6 +62,8 @@ tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 tonic = "0.7"
 cidr = "^0.2.1"
+ucx-sys = { path = "../../rshim-mmio/broker_rdma_rust/ucx-sys" }
+uct-rust = { path = "../../rshim-mmio/broker_rdma_rust/uct-rust" }
 
 [dependencies.lazy_static]
 version = "1.4"

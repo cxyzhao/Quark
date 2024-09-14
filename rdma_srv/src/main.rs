@@ -27,7 +27,6 @@
 #![allow(unused_imports)]
 #![feature(core_intrinsics)]
 #![recursion_limit = "256"]
-
 extern crate alloc;
 extern crate bit_field;
 extern crate core_affinity;
@@ -187,10 +186,12 @@ pub const IO_WAIT_CYCLES: i64 = 100_000; // 1ms
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("RDMA Service is starting!");
-    #[cfg(offload = "yes")]{
+    #[cfg(offload = "yes")]
+    {
         RDMA.Init("mlx5_2", 1);
     }
-    #[cfg(not(offload = "yes"))]{
+    #[cfg(not(offload = "yes"))]
+    {
         RDMA.Init("rocep152s0f0", 1);
     }
     let hostname_os = hostname::get()?;
@@ -342,15 +343,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // let localIpAddr = u32::from(Ipv4Addr::from_str("172.16.1.99").unwrap()).to_be();
                 let peerIpAddr;
                 let localIpAddr;
-                #[cfg(offload = "yes")]{
+                #[cfg(offload = "yes")]
+                {
                     peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.27").unwrap()).to_be();
                     localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.25").unwrap()).to_be();
                 }
-                #[cfg(not(offload = "yes"))]{
+                #[cfg(not(offload = "yes"))]
+                {
                     peerIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.7").unwrap()).to_be();
                     localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.5").unwrap()).to_be();
                 }
-                
+
                 RDMA_CTLINFO.localIp_set(localIpAddr);
                 SetupConnection(&peerIpAddr);
                 SetupConnection(&localIpAddr);
@@ -365,10 +368,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // };
             } else {
                 let localIpAddr;
-                #[cfg(offload = "yes")]{
+                #[cfg(offload = "yes")]
+                {
                     localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.25").unwrap()).to_be();
                 }
-                #[cfg(not(offload = "yes"))]{
+                #[cfg(not(offload = "yes"))]
+                {
                     localIpAddr = u32::from(Ipv4Addr::from_str("192.168.2.5").unwrap()).to_be();
                 }
                 RDMA_CTLINFO.localIp_set(localIpAddr);
@@ -427,10 +432,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // let mut eventdata: u64 = 0;
     let srvEventFd;
-    #[cfg(offload = "yes")]{
-        srvEventFd =  gen_eventfd();
+    #[cfg(offload = "yes")]
+    {
+        srvEventFd = gen_eventfd();
     }
-    #[cfg(not(offload = "yes"))]{
+    #[cfg(not(offload = "yes"))]
+    {
         srvEventFd = RDMA_SRV.eventfd;
     }
     println!("srvEventFd: {}", srvEventFd);
@@ -440,23 +447,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hostname = RDMA_CTLINFO.hostname_get();
     let mut events: Vec<EpollEvent> = Vec::with_capacity(1024);
 
-
     //Add UDP socket for client-to-service ctrl commnunication
-    let srv_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
-    unsafe{
+    let srv_udp_sock = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+    unsafe {
         let udp_s_addr;
-        #[cfg(offload = "yes")]{
+        #[cfg(offload = "yes")]
+        {
             udp_s_addr = u32::from_be_bytes([192, 168, 2, 25]).to_be();
         }
-        #[cfg(not(offload = "yes"))]{
+        #[cfg(not(offload = "yes"))]
+        {
             udp_s_addr = u32::from_be_bytes([192, 168, 2, 5]).to_be();
         }
         let srv_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
             sin_port: 3340u16.to_be(),
-            sin_addr: libc::in_addr {
-                s_addr: udp_s_addr,
-            },
+            sin_addr: libc::in_addr { s_addr: udp_s_addr },
             sin_zero: mem::zeroed(),
         };
         let result = libc::bind(
@@ -472,11 +478,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("srv_udp_sock: {}", srv_udp_sock);
     epoll_add(epoll_fd, srv_udp_sock, read_event(srv_udp_sock as u64))?;
     unblock_fd(srv_udp_sock);
-    RDMA_CTLINFO.fds_insert(
-        srv_udp_sock,
-        Srv_FdType::UDPCtrlSocketServer,
-    );
-  
+    RDMA_CTLINFO.fds_insert(srv_udp_sock, Srv_FdType::UDPCtrlSocketServer);
+
     loop {
         events.clear();
         // println!("in loop");
@@ -524,7 +527,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> Result<(), Box<dyn std::error::Error>> {
+fn HandleEvents(
+    epoll_fd: i32,
+    events: &Vec<EpollEvent>,
+    hostname: &String,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut eventdata: u64 = 0;
     for ev in events {
         // print!("u64: {:x}, events: {:x}", {ev.U64}, {ev.Events});
@@ -549,8 +556,7 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
 
                 let peerIpAddrU32 = cliaddr.sin_addr.s_addr;
 
-                let controlRegionId =
-                    RDMA_SRV.controlBufIdMgr.lock().AllocId().unwrap() as usize; // TODO: should handle no space issue.
+                let controlRegionId = RDMA_SRV.controlBufIdMgr.lock().AllocId().unwrap() as usize; // TODO: should handle no space issue.
                 let sockBuf = SocketBuff(Arc::new(SocketBuffIntern::InitWithShareMemory(
                     MemoryDef::DEFAULT_BUF_PAGE_COUNT,
                     &RDMA_SRV.controlRegion.ioMetas[controlRegionId].readBufAtoms as *const _
@@ -577,8 +583,7 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                     sockBuf.clone(),
                     rdmaConn.clone(),
                 );
-                let rdmaControlChannel =
-                    RDMAControlChannel::New((*rdmaChannel.clone()).clone());
+                let rdmaControlChannel = RDMAControlChannel::New((*rdmaChannel.clone()).clone());
 
                 match rdmaConn.ctrlChan.lock().chan.upgrade() {
                     None => {
@@ -743,8 +748,8 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                 std::mem::drop(fds);
                 SetupConnections();
             }
-            Srv_FdType::UDPCtrlSocketServer =>{
-                // Receives a single datagram message on the socket. 
+            Srv_FdType::UDPCtrlSocketServer => {
+                // Receives a single datagram message on the socket.
                 let mut buf = [0u8; 64];
                 let mut addr: libc::sockaddr = unsafe { std::mem::zeroed() };
                 let mut addrlen = std::mem::size_of_val(&addr) as libc::socklen_t;
@@ -761,7 +766,7 @@ fn HandleEvents(epoll_fd: i32, events: &Vec<EpollEvent>, hostname: &String) -> R
                 };
                 if bytes_received > 1024 {
                     println!("Receive data len {}", bytes_received);
-                    continue; 
+                    continue;
                 }
                 let data = &buf[..bytes_received as usize];
                 let data_str = str::from_utf8(data).unwrap();
@@ -790,7 +795,7 @@ fn RDMAProcess(epoll_fd: i32, hostname: &String) {
                 break;
             }
         }
-        
+
         // let res = 0;
         let res = match syscall!(epoll_wait(
             epoll_fd,
@@ -804,10 +809,10 @@ fn RDMAProcess(epoll_fd: i32, hostname: &String) {
         unsafe { events.set_len(res as usize) };
         // println!("RDMAProcess, res: {}, events len: {}, len2: {}", res, events.len(), &events.len());
         let _ = HandleEvents(epoll_fd, &events, hostname);
-        if totalCount > 0 || res > 0{
+        if totalCount > 0 || res > 0 {
             start = TSC.Rdtsc();
         }
-        if TSC.Rdtsc() - start >= (IO_WAIT_CYCLES/100) {
+        if TSC.Rdtsc() - start >= (IO_WAIT_CYCLES / 100) {
             break;
         }
         // if count == 0 {
@@ -836,13 +841,8 @@ fn RDMAProcessOnce() -> usize {
 
 fn SendData() {
     let channels_guard = RDMA_SRV.channels.lock();
-    for (k, v) in channels_guard.iter()  {
-        RDMA_SRV
-            .channels
-            .lock()
-            .get(&k)
-            .unwrap()
-            .RDMASend();
+    for (k, v) in channels_guard.iter() {
+        RDMA_SRV.channels.lock().get(&k).unwrap().RDMASend();
     }
 }
 
@@ -913,27 +913,26 @@ fn InitContainer(conn_sock: &UnixSocket, podId: [u8; 64]) {
         .unwrap();
 }
 
-fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, addrlen: libc::socklen_t) {
+fn InitContainer_Offload(
+    ctrl_sock: i32,
+    podId: [u8; 64],
+    addr: libc::sockaddr,
+    addrlen: libc::socklen_t,
+) {
     let cliEventFd = unsafe { libc::eventfd(0, 0) };
     unblock_fd(cliEventFd);
 
     let rdmaAgentId = RDMA_SRV.agentIdMgr.lock().AllocId().unwrap();
 
     //For offloading case, we set bit of agent as 1 forever;
-    let l2idx =  rdmaAgentId as usize / 64;
-    let l2pos =  rdmaAgentId as usize % 64;
+    let l2idx = rdmaAgentId as usize / 64;
+    let l2pos = rdmaAgentId as usize % 64;
     let l1idx = l2idx / 64;
     let l1pos = l2idx % 64;
     RDMA_SRV.shareRegion.bitmap.l2bitmap[l2idx].fetch_or(1 << l2pos, Ordering::SeqCst);
     RDMA_SRV.shareRegion.bitmap.l1bitmap[l1idx].fetch_or(1 << l1pos, Ordering::SeqCst);
-   
-    let rdmaAgent = RDMAAgent::New(
-        rdmaAgentId,
-        String::new(),
-        ctrl_sock,
-        cliEventFd,
-        podId,
-    );
+
+    let rdmaAgent = RDMAAgent::New(rdmaAgentId, String::new(), ctrl_sock, cliEventFd, podId);
     RDMA_SRV
         .agents
         .lock()
@@ -966,24 +965,30 @@ fn InitContainer_Offload(ctrl_sock: i32, podId: [u8; 64], addr: libc::sockaddr, 
     let ptr = body.as_ptr() as *const u8;
     let buf = unsafe { slice::from_raw_parts(ptr, 8) };
 
-    println!("srvMemRegion addr {:?}", RDMA_SRV.srvMemRegion.addr as usize);
-    println!("rdmaAgent shareMemRegion {:?}", rdmaAgent.shareMemRegion.addr);
+    println!(
+        "srvMemRegion addr {:?}",
+        RDMA_SRV.srvMemRegion.addr as usize
+    );
+    println!(
+        "rdmaAgent shareMemRegion {:?}",
+        rdmaAgent.shareMemRegion.addr
+    );
 
     // Send back with udp ctrl socket
     // let mut buf = [123, rdmaAgentId];
     // buf[0..4].copy_from_slice(&rdmaAgentId.to_le_bytes());
-    unsafe{
-        let res = libc::sendto(ctrl_sock,
+    unsafe {
+        let res = libc::sendto(
+            ctrl_sock,
             buf.as_ptr() as *const libc::c_void,
             buf.len(),
-               0,
-               &addr as *const _ as *mut libc::sockaddr,
-               addrlen);
+            0,
+            &addr as *const _ as *mut libc::sockaddr,
+            addrlen,
+        );
         println!("Send {} back to {}", rdmaAgentId, res);
     }
-
 }
-
 
 fn SetupConnections() {
     let timestamp = RDMA_CTLINFO.timestamp_get();
@@ -1091,13 +1096,13 @@ fn SetupConnection(ip: &u32) {
     }
 }
 
-
 fn gen_eventfd() -> RawFd {
-
     let efd = unsafe { libc::eventfd(0, 0) };
 
     let client_sendfd_sock_fd = UnixSocket::NewClient("/EVENTFDSOCKET").unwrap();
-    let client_sendfd_sock = UnixSocket { fd: client_sendfd_sock_fd };
+    let client_sendfd_sock = UnixSocket {
+        fd: client_sendfd_sock_fd,
+    };
     let res = client_sendfd_sock.SendFd(efd.as_raw_fd());
     drop(client_sendfd_sock);
     efd

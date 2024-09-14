@@ -230,9 +230,9 @@ pub fn Wait() {
             }
         } else {
             if PollAsyncMsg() == 0 {
-                unsafe {
-                    asm!("pause");
-                }
+                // unsafe {
+                //     asm!("pause");
+                // }
             }
 
             next = SHARESPACE.scheduler.GetNext();
