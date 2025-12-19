@@ -141,7 +141,7 @@ impl IBContext {
             panic!("Failed to open IB device error");
         }
 
-        // println!("ibv_open_device succeeded");
+        println!("ibv_open_device succeeded");
         /* We are now done with device list, free it */
         unsafe { rdmaffi::ibv_free_device_list(device_list) };
 
@@ -400,8 +400,7 @@ mod ucx_key {
         let context = MemoryContext::open_dev_tl(
             CString::new("mlx5_2:1").unwrap().as_c_str(),
             CString::new("rc_mlx5").unwrap().as_c_str(),
-        )
-        .unwrap();
+        );
 
         let mut mr = super::MemoryRegion::default();
 
@@ -410,20 +409,20 @@ mod ucx_key {
             flags: 0,
         };
 
-        unsafe {
-            // SAFETY of transmute: they are technically the same but created by two different binding
-            let status = uct_md_mem_attach_verbs(
-                context.memory_domain.0,
-                transmute(pd.0),
-                exported_key.to_le_bytes().as_ptr() as *const _,
-                &mut params,
-                transmute(&mut mr.0),
-            );
+        // unsafe {
+        //     // SAFETY of transmute: they are technically the same but created by two different binding
+        //     let status = uct_md_mem_attach_verbs(
+        //         context.memory_domain.0,
+        //         transmute(pd.0),
+        //         exported_key.to_le_bytes().as_ptr() as *const _,
+        //         &mut params,
+        //         transmute(&mut mr.0),
+        //     );
 
-            if status != ucs_status_t::UCS_OK {
-                return Err(super::Error::SysError(status as i32));
-            }
-        }
+        //     if status != ucs_status_t::UCS_OK {
+        //         return Err(super::Error::SysError(status as i32));
+        //     }
+        // }
 
         Ok(mr)
     }
