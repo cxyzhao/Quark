@@ -26,6 +26,8 @@
 #![allow(non_snake_case)]
 #![allow(unused_imports)]
 #![feature(core_intrinsics)]
+#![allow(invalid_reference_casting)]
+#![allow(unexpected_cfgs)]
 #![recursion_limit = "256"]
 
 extern crate alloc;

@@ -7,14 +7,16 @@ debug:
 clean:
 	cargo clean
 	# CARGO_TARGET_DIR=../target cargo clean
+
 ARCH := $(shell uname -m)
 ifeq ($(ARCH),aarch64)
-    RUSTFLAGS_VAR = '--cfg target_arch="aarch64" --cfg offload="yes" --cfg gvmi="yes"'
+    RUSTFLAGS_VAR = --cfg offload=\"yes\" --cfg gvmi=\"yes\" --cap-lints warn
+    TARGET_SPEC = --target aarch64-unknown-linux-gnu
 else
     RUSTFLAGS_VAR =
+    TARGET_SPEC =
 endif
-release:
-	RUSTFLAGS=$(RUSTFLAGS_VAR) cargo build --release
 
-	# CARGO_TARGET_DIR=../target cargo build --release
+release:
+	RUSTFLAGS="$(RUSTFLAGS_VAR)" cargo +nightly build --release $(TARGET_SPEC)
 
