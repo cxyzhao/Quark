@@ -309,9 +309,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // }
 
     unsafe {
+        let quark_sgiov_container_id = std::env::var("QUARK_SGIOV_CONTAINER_ID")
+            .unwrap_or_else(|_| "0".to_string())
+            .parse::<u16>();
+
         let serv_addr: libc::sockaddr_in = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
-            sin_port: 8888u16.to_be(),
+            sin_port: (8888u16 + quark_sgiov_container_id.unwrap_or(0)).to_be(),
             sin_addr: libc::in_addr {
                 s_addr: u32::from_be_bytes([0, 0, 0, 0]).to_be(),
             },
@@ -461,9 +465,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             udp_s_addr = u32::from_be_bytes([192, 168, 2, 5]).to_be();
         }
+        
+        let quark_sgiov_container_id = std::env::var("QUARK_SGIOV_CONTAINER_ID")
+        .unwrap_or_else(|_| "0".to_string())
+        .parse::<u16>();
+
         let srv_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
-            sin_port: 3340u16.to_be(),
+            sin_port: (3340u16 + quark_sgiov_container_id.unwrap_or(0)).to_be(),
             sin_addr: libc::in_addr { s_addr: udp_s_addr },
             sin_zero: mem::zeroed(),
         };
@@ -1080,9 +1089,13 @@ fn SetupConnection(ip: &u32) {
 
     RDMA_SRV.conns.lock().insert(node.ipAddr, rdmaConn.clone());
     unsafe {
+        let quark_sgiov_container_id = std::env::var("QUARK_SGIOV_CONTAINER_ID")
+        .unwrap_or_else(|_| "0".to_string())
+        .parse::<u16>();
+
         let serv_addr: libc::sockaddr_in = libc::sockaddr_in {
             sin_family: libc::AF_INET as u16,
-            sin_port: 8888u16.to_be(), //8888 is the port for RDMASvc to shake hands
+            sin_port: (8888u16 + quark_sgiov_container_id.unwrap_or(0)).to_be(), //8888 + QUARK_SGIOV_CONTAINER_ID is the port for RDMASvc to shake hands
             sin_addr: libc::in_addr {
                 s_addr: node.ipAddr,
             },
@@ -1101,7 +1114,12 @@ fn SetupConnection(ip: &u32) {
 fn gen_eventfd() -> RawFd {
     let efd = unsafe { libc::eventfd(0, 0) };
 
-    let client_sendfd_sock_fd = UnixSocket::NewClient("/EVENTFDSOCKET").unwrap();
+    let quark_sgiov_container_id = std::env::var("QUARK_SGIOV_CONTAINER_ID")
+    .unwrap_or_else(|_| "0".to_string())
+    .parse::<u16>();
+    let client_sendfd_sock_path = format!("/EVENTFDSOCKET{}", quark_sgiov_container_id.unwrap_or(0));
+    let client_sendfd_sock_fd = UnixSocket::NewClient(&client_sendfd_sock_path).unwrap();
+
     let client_sendfd_sock = UnixSocket {
         fd: client_sendfd_sock_fd,
     };

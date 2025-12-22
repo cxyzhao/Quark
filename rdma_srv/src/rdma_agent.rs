@@ -135,8 +135,19 @@ impl RDMAAgent {
         // let memfdname = CString::new("RDMASrvMemFd").expect("CString::new failed for RDMASrvMemFd");
         // let memfd = unsafe { libc::memfd_create(memfdname.as_ptr(), libc::MFD_ALLOW_SEALING) };
 
-        const MEMFDNAME   : *const c_char = b"/SharedMemRegionWithBroker\0".as_ptr() as *const c_char;
+        // print out the parameters for debugging
+        println!("RDMAAgent::New - id: {}, clientId: {}, connSock: {}, clientEventfd: {}, podId: {:?}", 
+                 id, clientId, connSock, clientEventfd, podId);
+
+        let quark_sgiov_container_id = std::env::var("QUARK_SGIOV_CONTAINER_ID")
+            .unwrap_or_else(|_| "0".to_string())
+            .parse::<u16>()
+            .unwrap_or(0);    
+        let memfd_name = format!("/SharedMemRegionWithBroker{}\0", quark_sgiov_container_id);
+        let memfd_name_cstr = CString::new(memfd_name.trim_end_matches('\0')).expect("CString::new failed");
+        let MEMFDNAME: *const c_char = memfd_name_cstr.as_ptr();
         let memfd = unsafe { shm_open(MEMFDNAME, O_RDWR, libc::S_IRUSR | libc::S_IWUSR) };
+        println!("RDMAAgent::New - memfd: {}", memfd);
 
         let size = mem::size_of::<ClientShareRegion>();
         let _ret = unsafe { libc::ftruncate(memfd, size as i64) };

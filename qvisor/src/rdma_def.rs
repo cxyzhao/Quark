@@ -281,13 +281,19 @@ impl RDMASvcClient {
             /*
             UDP control section
             */
+
+            let quark_sgiov_container_id = std::env::var("QUARK_SGIOV_CONTAINER_ID")
+            .unwrap_or_else(|_| "0".to_string())
+            .parse::<u16>();
+
+
             let buf = podId.as_slice();
             //create and bind client udp socket
             let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
             unsafe{
                 let cli_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
                     sin_family: libc::AF_INET as u16,
-                    sin_port: 3340u16.to_be(),
+                    sin_port: (3340u16 + quark_sgiov_container_id.unwrap_or(0)).to_be(),
                     sin_addr: libc::in_addr {
                         //192.168.2.1
                         s_addr: u32::from_be_bytes([192, 168, 2, 5]).to_be(),
@@ -306,11 +312,11 @@ impl RDMASvcClient {
             }
             //agent_id is data_agent_id[1]
             let mut data_agent_id= [0, 0];
-            //rdma_srv's udp port is 3340 
+            //rdma_srv's udp port is 3340  + QUARK_SGIOV_CONTAINER_ID
             let srv_udp_addr: libc::sockaddr_in =  unsafe{ 
                 libc::sockaddr_in {
                 sin_family: libc::AF_INET as u16,
-                sin_port: 3340u16.to_be(),
+                sin_port: (3340u16 + quark_sgiov_container_id.unwrap_or(0)).to_be(),
                 sin_addr: libc::in_addr {
                     //192.168.2.21
                     s_addr: u32::from_be_bytes([192, 168, 2, 25]).to_be(),
