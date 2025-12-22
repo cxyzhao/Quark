@@ -7,6 +7,8 @@ use std::{mem, ptr};
 use std::io::Error;
 use core::sync::atomic::AtomicU32;
 
+use crate::print;
+
 use super::qlib::linux_def::*;
 use super::qlib::rdma_share::*;
 use super::qlib::rdma_svc_cli::*;
@@ -267,8 +269,27 @@ impl RDMASvcClient {
     fn gen_eventfd() -> RawFd {
 
         let efd = unsafe { libc::eventfd(0, 0) };
-    
-        let client_sendfd_sock_fd = UnixSocket::NewClient("/EVENTFDSOCKET").unwrap();
+
+        // Try to read QUARK_SGIOV_CONTAINER_ID from fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+        let mut QUARK_SGIOV_CONTAINER_ID: u16 = 0;
+        
+        // Try to read from fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+        if let Ok(file_content) = std::fs::read_to_string("/tmp/QUARK_SGIOV_CONTAINER_ID") {
+            if let Ok(id) = file_content.trim().parse::<u16>() {
+                QUARK_SGIOV_CONTAINER_ID = id;
+                info!("gen_eventfd: Found QUARK_SGIOV_CONTAINER_ID from /tmp/QUARK_SGIOV_CONTAINER_ID: {}", id);
+            }
+        }
+        
+        if QUARK_SGIOV_CONTAINER_ID == 0 {
+            error!("gen_eventfd: Failed to find QUARK_SGIOV_CONTAINER_ID, using 0");
+        }
+
+        info!("gen_eventfd: Using QUARK_SGIOV_CONTAINER_ID: {}", QUARK_SGIOV_CONTAINER_ID);
+        let client_sendfd_sock_path = format!("/EVENTFDSOCKET{}", QUARK_SGIOV_CONTAINER_ID);
+        let client_sendfd_sock_fd = UnixSocket::NewClient(&client_sendfd_sock_path).unwrap();
+
+
         let client_sendfd_sock = UnixSocket { fd: client_sendfd_sock_fd };
         let res = client_sendfd_sock.SendFd(efd.as_raw_fd());
         drop(client_sendfd_sock);
@@ -284,10 +305,25 @@ impl RDMASvcClient {
             let buf = podId.as_slice();
             //create and bind client udp socket
             let cli_udp_sock = unsafe {libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0)};
+
+
+
+
+            // Try to read QUARK_SGIOV_CONTAINER_ID from fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+            let mut QUARK_SGIOV_CONTAINER_ID: u16 = 0;
+            
+            // Try to read from fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+            if let Ok(file_content) = std::fs::read_to_string("/tmp/QUARK_SGIOV_CONTAINER_ID") {
+                if let Ok(id) = file_content.trim().parse::<u16>() {
+                    QUARK_SGIOV_CONTAINER_ID = id;
+                    info!("initialize: Found QUARK_SGIOV_CONTAINER_ID from /tmp/QUARK_SGIOV_CONTAINER_ID: {}", id);
+                }
+            }
+
             unsafe{
                 let cli_udp_addr: libc::sockaddr_in = libc::sockaddr_in {
                     sin_family: libc::AF_INET as u16,
-                    sin_port: 3340u16.to_be(),
+                    sin_port: (3340u16 + QUARK_SGIOV_CONTAINER_ID).to_be(),
                     sin_addr: libc::in_addr {
                         //192.168.2.7
                         s_addr: u32::from_be_bytes([192, 168, 2, 7]).to_be(),
@@ -306,11 +342,11 @@ impl RDMASvcClient {
             }
             //agent_id is data_agent_id[1]
             let mut data_agent_id= [0, 0];
-            //rdma_srv's udp port is 3340 
+            //rdma_srv's udp port is 3340 + QUARK_SGIOV_CONTAINER_ID
             let srv_udp_addr: libc::sockaddr_in =  unsafe{ 
                 libc::sockaddr_in {
                 sin_family: libc::AF_INET as u16,
-                sin_port: 3340u16.to_be(),
+                sin_port: (3340u16 + QUARK_SGIOV_CONTAINER_ID).to_be(),
                 sin_addr: libc::in_addr {
                     //192.168.2.27
                     s_addr: u32::from_be_bytes([192, 168, 2, 27]).to_be(),
@@ -365,7 +401,28 @@ impl RDMASvcClient {
             // let cli_memfd = unsafe { libc::memfd_create(cli_memfd_name.as_ptr(), libc::MFD_ALLOW_SEALING) };
 
             //get cli_memfd from broker process
-            const cli_memfd_name : *const c_char = b"/SharedMemRegionWithBroker\0".as_ptr() as *const c_char;
+                        // Try to read QUARK_SGIOV_CONTAINER_ID from fixed temp file
+            let mut QUARK_SGIOV_CONTAINER_ID: u16 = 0;
+            
+            // Try to read from fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+            if let Ok(file_content) = std::fs::read_to_string("/tmp/QUARK_SGIOV_CONTAINER_ID") {
+                if let Ok(id) = file_content.trim().parse::<u16>() {
+                    QUARK_SGIOV_CONTAINER_ID = id;
+                    info!("initialize: Found QUARK_SGIOV_CONTAINER_ID from /tmp/QUARK_SGIOV_CONTAINER_ID: {}", id);
+                }
+            }
+            
+            if QUARK_SGIOV_CONTAINER_ID == 0 {
+                error!("initialize: Failed to find QUARK_SGIOV_CONTAINER_ID, using 0");
+            }
+
+            info!("initialize: Using QUARK_SGIOV_CONTAINER_ID: {}", QUARK_SGIOV_CONTAINER_ID);
+            let cli_memfd_name = format!("/SharedMemRegionWithBroker{}\0", QUARK_SGIOV_CONTAINER_ID);
+            let cli_memfd_name = CString::new(cli_memfd_name.trim_end_matches('\0')).expect("CString::new failed for cli_memfd_name");
+            let cli_memfd_name = cli_memfd_name.as_ptr();
+            println!("cli_memfd_name: {:?}", cli_memfd_name);
+
+
             let cli_memfd = unsafe { shm_open(cli_memfd_name, O_RDWR, libc::S_IRUSR | libc::S_IWUSR) };
 
             if cli_memfd == -1 {
