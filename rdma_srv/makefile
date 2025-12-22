@@ -10,7 +10,7 @@ clean:
 
 ARCH := $(shell uname -m)
 ifeq ($(ARCH),aarch64)
-    RUSTFLAGS_VAR = --cfg offload=\"yes\" --cfg gvmi=\"yes\" --cap-lints warn
+    RUSTFLAGS_VAR = --cfg offload=\"yes\" --cfg gvmi=\"no\" --cap-lints warn
     TARGET_SPEC = --target aarch64-unknown-linux-gnu
 else
     RUSTFLAGS_VAR =
