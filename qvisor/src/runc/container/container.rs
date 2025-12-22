@@ -442,6 +442,27 @@ impl Container {
     ) -> Result<Self> {
         info!("Create container {} in root dir: {}", id, &conf.RootDir);
         debug!("spec for creating container: {:#?}", &spec);
+        
+        // Extract QUARK_SGIOV_CONTAINER_ID annotation
+        let mut sgiov_id_value: u16 = 0;
+        if let Some(sgiov_id) = spec.annotations.get("QUARK_SGIOV_CONTAINER_ID") {
+            info!("Found QUARK_SGIOV_CONTAINER_ID annotation: {}", sgiov_id);
+            if let Ok(id_val) = sgiov_id.parse::<u16>() {
+                sgiov_id_value = id_val;
+                info!("Parsed QUARK_SGIOV_CONTAINER_ID: {}", id_val);
+            } else {
+                info!("Failed to parse QUARK_SGIOV_CONTAINER_ID as u16: {}", sgiov_id);
+            }
+        } else {
+            info!("QUARK_SGIOV_CONTAINER_ID annotation not found in spec, setting to 0");
+        }
+        
+        // Write SGIOV_CONTAINER_ID to fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+        if let Err(e) = Self::WriteStr("/tmp/QUARK_SGIOV_CONTAINER_ID", &sgiov_id_value.to_string()) {
+            info!("Failed to write SGIOV_CONTAINER_ID to temp file: {:?}", e);
+        } else {
+            info!("Wrote SGIOV_CONTAINER_ID {} to /tmp/QUARK_SGIOV_CONTAINER_ID", sgiov_id_value);
+        }
         //debug!("container spec is {:?}", &spec);
         ValidateID(id)?;
 
@@ -641,6 +662,28 @@ impl Container {
     ) -> Result<Self> {
         info!("Create container {} in root dir: {}, bundleDir {}", id, &conf.RootDir, bundleDir);
         //debug!("container spec is {:?}", &spec);
+        
+        // Extract QUARK_SGIOV_CONTAINER_ID annotation
+        let mut sgiov_id_value: u16 = 0;
+        if let Some(sgiov_id) = spec.annotations.get("QUARK_SGIOV_CONTAINER_ID") {
+            info!("Found QUARK_SGIOV_CONTAINER_ID annotation: {}", sgiov_id);
+            if let Ok(id_val) = sgiov_id.parse::<u16>() {
+                sgiov_id_value = id_val;
+                info!("Parsed QUARK_SGIOV_CONTAINER_ID: {}", id_val);
+            } else {
+                info!("Failed to parse QUARK_SGIOV_CONTAINER_ID as u16: {}", sgiov_id);
+            }
+        } else {
+            info!("QUARK_SGIOV_CONTAINER_ID annotation not found in spec, setting to 0");
+        }
+        
+        // Write SGIOV_CONTAINER_ID to fixed temp file: /tmp/QUARK_SGIOV_CONTAINER_ID
+        if let Err(e) = Self::WriteStr("/tmp/QUARK_SGIOV_CONTAINER_ID", &sgiov_id_value.to_string()) {
+            info!("Failed to write SGIOV_CONTAINER_ID to temp file: {:?}", e);
+        } else {
+            info!("Wrote SGIOV_CONTAINER_ID {} to /tmp/QUARK_SGIOV_CONTAINER_ID", sgiov_id_value);
+        }
+        
         ValidateID(id)?;
 
         let _unlockRoot = if !crate::QUARK_CONFIG.lock().Sandboxed {
