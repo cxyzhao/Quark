@@ -34,7 +34,7 @@ lazy_static! {
     //pub static ref RDMA_SRV_SHARED_REGION: ShareRegion = ShareRegion::default();
 }
 
-pub const RECV_UDP_COUNT: u32 = 2000;
+pub const RECV_UDP_COUNT: u32 = 32;
 
 #[derive(Clone, Debug)]
 pub enum SrvEndPointStatus {

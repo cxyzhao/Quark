@@ -180,7 +180,7 @@ impl RDMAAgent {
         #[cfg(not(gvmi = "yes"))]{
             gvmiAddr = 0;
             tcpMR = RDMA
-                .CreateMemoryRegion(&shareRegion.iobufs as *const _ as u64, 2 * 64 * 1024 * 1024)
+                .CreateMemoryRegion(&shareRegion.iobufs as *const _ as u64, 2 * 16 * 1024 * 1024)
                 .unwrap();
         }
 
