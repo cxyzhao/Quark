@@ -203,7 +203,7 @@ impl IBContext {
     }
 
     pub fn CreateCompleteQueue(&self, cc: &CompleteChannel) -> CompleteQueue {
-        let cq = unsafe { rdmaffi::ibv_create_cq(self.0, 2000, ptr::null_mut(), cc.0, 0) };
+        let cq = unsafe { rdmaffi::ibv_create_cq(self.0, 32, ptr::null_mut(), cc.0, 0) };
 
         if cq.is_null() {
             // TODO: cleanup
@@ -514,8 +514,8 @@ impl RDMAContext {
             recv_cq: context.completeQueue.0 as *const _ as *mut _,
             srq: ptr::null::<rdmaffi::ibv_srq>() as *mut _,
             cap: rdmaffi::ibv_qp_cap {
-                max_send_wr: 8192, //MAX_SEND_WR,
-                max_recv_wr: 8192, //MAX_RECV_WR,
+                max_send_wr: 32, //MAX_SEND_WR,
+                max_recv_wr: 32, //MAX_RECV_WR,
                 max_send_sge: MAX_SEND_SGE,
                 max_recv_sge: MAX_RECV_SGE,
                 max_inline_data: 0,
