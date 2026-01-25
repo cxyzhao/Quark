@@ -371,7 +371,7 @@ pub const SOCKET_BUF_SIZE: usize = (MemoryDef::DEFAULT_BUF_PAGE_COUNT * MemoryDe
 // todo: caculate this to fit ClientShareRegion in 1GB
 //pub const IO_BUF_COUNT: usize = 7 * 1024; //16 * 1024 - 128; // ~16K
 //DONE(cxyzhao) INCR SKB BUF
-pub const IO_BUF_COUNT: usize = 128; //16 * 1024 - 128; // ~16K
+pub const IO_BUF_COUNT: usize = 16; //16 * 1024 - 128; // ~16K
 
 #[repr(align(0x10000))]
 #[repr(C)]
